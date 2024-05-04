@@ -12,30 +12,30 @@ I did not pursue the idea for a number of years but in April 2024, I stumbled ac
 
 This triggered my wish to restart my former idea with more recent components, like 
 
-  * Unexpected Maker's [Feather S3](https://esp32s3.com/feathers3.html) boards for sender and receiver. This board has a couple of advantages over generic ESP32-S3 boards: A JST-PH connector and LiPo battery charger; a second 3.3V LDO which keeps supply voltages separate and clean; a u.fl WiFi antenna connector which allows you to attach an external antenna for better signal quality without an [external antenna mod](https://www.youtube.com/watch?v=o4mtrueU6eM). 
+  * MCU: [ESP32-C6-DevKitC-1](https://docs.espressif.com/projects/espressif-esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/index.html) or better -1U (with u.fl connector for an external antenna to avoid hacking an [external antenna mod](https://www.youtube.com/watch?v=o4mtrueU6eM)). This thing sports a single RISC-V core running at 160 MHz. This sounds feeble but in reality is is [slightly faster](https://github.com/nopnop2002/esp-idf-benchmark) (at least in Dhrystones) than the ESP32-S3, and it supports 2.4 GHz [WiFi6](https://en.wikipedia.org/wiki/Wi-Fi_6) 802.11ax (up to HT20/MCS9) which was specifically engineered for IoT solutions in noisy environments. As soon as the [ESP32-C5](https://www.espressif.com/en/news/ESP32-C5) comes out and is supported by the ESP-IDF, it should be straightforward to simply do a pin-compatible upgrade to 240 MHz and 5 GHz WiFi6. 
 
-  * sender: an AKM [AK5538VN](https://www.akm.com/eu/en/products/audio/audio-adc/ak5538vn/) 8-channel audio ADC which is [I2S / TDM](https://en.wikipedia.org/wiki/I%C2%B2S) capable. Sadly, it is not in stock at my favourite PCB maker (see **Building Prototypes** below). An 8-ch. alternative would be Cirrus Logic's CS5368 but this part uses 2 power supply voltages and much more power. Their better (low power, single supply) successor part CS5308P was announced in summer 2023 but it wasn't even available as samples in April 2024. Another alternative would be two TI PCM1840's but they are not natively cascadable and we would have to cascade their data in software.
+  * ADC: AKM [AK5538VN](https://www.akm.com/eu/en/products/audio/audio-adc/ak5538vn/) 8-channel audio ADC which is [I2S / TDM](https://en.wikipedia.org/wiki/I%C2%B2S) capable. Sadly, it is not in stock at my favourite PCB maker (see **Building Prototypes** below). An 8-ch. alternative would be Cirrus Logic's CS5368 but this part uses 2 power supply voltages and much more power. Their better (low power, single supply) successor part CS5308P was announced in summer 2023 but it wasn't even available as samples in April 2024. 
 
-  * receiver: an AKM [AK4438VN](https://www.akm.com/eu/en/products/audio/audio-dac/ak4438vn/) 8-ch audio DAC (same sourcing problem as with the 5538).  Alternatively, a [Texas Instruments / Burr-Brown PCM1691](https://www.ti.com/product/de-de/PCM1681-Q1). 
+  * DAC: AKM [AK4438VN](https://www.akm.com/eu/en/products/audio/audio-dac/ak4438vn/) 8-ch audio DAC (same sourcing problem as with the 5538).  Alternatively, a [Texas Instruments / Burr-Brown PCM1691](https://www.ti.com/product/de-de/PCM1681-Q1). 
 
   * a couple of low-noise op-amps like TL074 or OPA4134 or any other low-noise type with the same standard footprint. Or maybe the same NJM2068D's that Roland uses. 
 
-  * some power management chips creating supply voltages.
+  * some power management chips for LiPo charging and creating supply voltages.
  
   * ultra low-power LCD or e-ink displays (SPI or I2C) for the simple user interface 
 
 Primarly for marketing reasons, everything will work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
 
 
-##About Using WiFi
+## A Word About Using WiFi
 
-The combo will be using a private WiFi (with an arbitrary settable SSID) with the receiver as the AP and websocket server and the sender as the client, without a router in between. The WiFi password will probably be the same hardcoded random string. 
+The combo will be using a private WiFi (with an arbitrary settable SSID) with the receiver as the AP and websocket server and the sender as the client, without a router in between and thus avoiding router latency. The WiFi password will probably be the same hardcoded random string. 
 
-The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is within the documented 20 Mbps TCP throughput provided by the [ESP-IDF](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32s3/api-guides/WiFi.html) but not leaving very much redundancy to play with. Processing time permitting, I may compress the buffers from 32 bits per slot (of which the last 8 bit are unused in the TDM format) to 24.   
+The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) 
 
 Using websockets over TCP will reduce the typical HTTP latency, but provide lost / out-of-sequence packet handling and checksumming on the TCP layer. Granted, one could use UDP which is said to provide 30 Mbps but then we would have to roll our own error handling, creating complexity and new latency. 
 
-Speaking if which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. This leaves to be measured which is the first step I'll do as soon as the FeatherS3 boards arrive (i.e. raise a GPIO in the sender, then send 32 byte packets one way, then on the receiver pick up the packet and raise a GPIO. Measure the time between the GPIOs with my oscilloscope).  
+Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. This remains to be measured which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
 
 
 
@@ -50,20 +50,21 @@ At first-order approximation, the basic functionality will look like this:
 ##Sender
 
   * the sender will be the WiFi client in station mode connecting to the server via websocket.
-  * for the pairing, the user must trigger a WiFi scan on the receiver and select the desired  SSID which will stored permanently but can be changed any time later.  
+  * for the pairing, the user must trigger a WiFi scan on the receiver and select the desired  SSID which will stored permanently but can be changed any time later.  There will be a small display and a couple of buttons with a simple UI for this.
   * the signals E1 - E6 from the hex pickup and the normal guitar signal will be sampled by the ADC.
-  * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background (on the second MCU core), and together they will be inserted in slot #7 of the TDM data stream
-  * one ESP32-S3 I2S channel (I2S0) will work as I2S master, generating all the required clocks. Each data packet in the TDM frame will be 32 bytes long, but we may pack them into 24 to reduce the over-the-air data rate. 
-  * The WS / FSYNC / LRCK pin of I2S0 will be used as an interrupt source for an edge-triggered GPIO. On the appropriate edge (TDM frame start), it will trigger an interrupt service routine which will set a "data ready" flag, and then the main routine can immediately pick up the I2S DMA buffer from the previous conversion cycle without any further latency (well, maybe a microsecond).  
-  * as soon as the TDM packets are read, they will merged to one, plus the GK switch bits and the GKVOL value sitting around, and the resulting TDM8 frame will be WiFi'd to the receiver. 
-  * Power: a single LiPo battery of about 2500 mAh or larger if I can get one. One could use 18650 cells for example, as long as they have a JST-PH connector for the FeatherS3. Charging and battery voltage measurement will be handled by the FeatherS3 board.  A charge pump and an inverter with LDOs behind them will generate +/- 7V directly from the LiPo battery for the op-amps and the GK-2A or GK-3. The ADCs will be powered by the secondary LDO on the FeatherS3 board. 
+  * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background, and the data will be inserted in slot #7 of the TDM data stream, which is not used by audio data. 
+  * the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks. Each data packet in the TDM frame will be 32 bytes long, but we may pack them into 24 to reduce the over-the-air data rate if we have spare CPU cycles. 
+  * The WS / FSYNC / LRCK pin of I2S0 will be used as an interrupt source for an edge-triggered GPIO. The appropriate edge will trigger an interrupt service routine which will set a "data ready" flag, and then the main routine can immediately pick up the I2S DMA buffer from the previous conversion cycle without any further latency (well, maybe a microsecond which corresponds to ~12 BCLK cycles).  
+  * as soon as the TDM DMA buffer is read, the GK switch bits and the GKVOL value will be copied to bytes 28-31, and the resulting 32-byte buffer will be WiFi'd to the receiver. 
+  * Power: a single LiPo battery of about 2500 mAh or larger if I can get one. One could use 18650 cells for example. Charging and battery voltage measurement will be handled by an equivalent of Adafruit's [PowerBoost 1000C](https://learn.adafruit.com/adafruit-powerboost-1000c-load-share-usb-charge-boost/overview) board. A charge pump and an inverter with LDOs behind them will generate +/- 7V directly from the LiPo battery for the op-amps and the GK-2A or GK-3. The ADC analog supply will be generated from the LiPo via a separate LDO. 
 
 ##Receiver
 
   * the receiver will work as a WiFi AP and create the private WiFi and a [websocket](https://en.wikipedia.org/wiki/WebSocket) server. Websockets are TCP based without the normal HTTP overhead, so you get checksumming, packet re-sending and packet sequencing for free. 
-  * for the pairing, the user will have to set an unsuspicious WiFi AP SSID and store it. You can change the name any time later. This has no other function than allowing you to run several of these devices within WiFi range, e.g. on a stage. The WiFi password will probably be a hardcoded random string.
-  * when receiving a websocket event, the first 7 TDM slots (GK1-6 and normal guitar) are written to the PCM1681 DAC via I2S. The switch bits will be written to two open drain GPIOs. The GK-VOL value will be PWM'd to a simple low pass filter, restoring the voltage. 
-  * Power: via USB-C for 2x 3.3V (generated by the FeatherS3),  and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
+  * for the pairing, the user will have to set an unsuspicious WiFi AP SSID and store it (again, There will be a small display and a couple of buttons with a simple UI for this). You can change the name any time later. This has no other function than allowing you to run several of these devices within WiFi range, e.g. on a stage. The WiFi password will probably be a hardcoded random string. Maybe I can do something with [Wi-Fi Easy Connect](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html#wi-fi-easy-connect-dpp) or WPS using a BlueTooth link. 
+  * again, the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks.
+  * when receiving a websocket event, the first 28 bytes of the received buffer (7 TDM slots for GK1-6 and normal guitar) are written to the DAC via I2S. Bytes 28-31 are be dissected and handled accordingly: The switch bits are written to two open drain GPIOs. The GK-VOL value is written to an PWM out to a simple low pass filter, restoring the voltage. 
+  * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 
 
 ##Potential Extensions
@@ -84,16 +85,8 @@ As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it w
    
 To keep things less complicated one could try to find a UHF transmitter with a higher bandwidth, say, 15 MHz, but I cannot find any at the moment, and they would not be free to use without an FCC license. Which may actually be what killed rockykoplik's project. (which is also why it does work using WiFi 802.11n in HT40 mode with a channel bandwidth of 40 MHz). 
 
-So no, I do not think this is a viable alternative.  But feel free to propose ways to get this done. The part up to the input / output of the video transceivers should be trivial to design with the help of a low-power MCU like an Arm Cortex-M0 board. That might even work in CircuitPython because we would just shuffle a couple of bits and misuse the I2S port for ADC / DIT / DIR clock generation. 
+So no, I do not think this is a viable alternative.  But feel free to propose ways to get this done. The part up to the input / output of the video transceivers should be trivial to design with the help of a low-power MCU like an Arm Cortex-M0 board. That might even work in CircuitPython because we would just shuffle a couple of ADC / DAC / DIT / DIR configuration bits and misuse the I2S port for TDM clock generation. 
   
-An alternative to the ESP32-S3 would be a **Teensy 4.0** board which is MUCH faster but has no WiFi. One would have to attach a WiFi coprocessor (e.g. ESP8266 or ESP32 based) over UART or over SPI which does not necessarily make things faster or lower latency. 
-
-Using a **5 GHz WiFi** controller would be a real option, a) because the 5 GHz band is usually much less congested and b) because it has many more channels at its disposal which helps to further reduce environmental influences. The RTL8720DN module is dirt cheap and provides 802.11n MCS0-7 HT40 with up to 135 or 150 (depending who you ask) Mbps. But it does not support I2S TDM in & out, and the main MCU in the module is an ARM Cortex-M33 200 MHz type, which should be about as fast as a single Xtensa X7 core at the same frequency and hence comparable to a ESP32-S2. Bummer. 
-
-So yes, something like a slightly faster ESP32-something with 5 GHz WiFi would be something. Eventually. Or a successor to the RTL8720DN with a faster CPU core (e.g. Cortex-M7) and proper I2S/TDM support.   
-  
-Too bad that the Raspberry Pi Zero 2W does not support 5 GHz WiFi. Is has ample CPU power at a decent power requirement. Not sure about I2S/TDM support. Also a no-go. (Yes it runs a fully fledged Linux but booting it can be made reasonably fast using busybox init, and we could ship SD Card images for DIYers.) 
-
 
 ## Building Prototypes
 

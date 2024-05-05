@@ -12,7 +12,7 @@ I did not pursue the idea for a number of years but in April 2024, I stumbled ac
 
 This triggered my wish to restart my former idea with more recent components, like 
 
-  * MCU: [ESP32-C6-DevKitC-1](https://docs.espressif.com/projects/espressif-esp-dev-kits/en/latest/esp32c6/esp32-c6-devkitc-1/index.html) or better -1U (with u.fl connector for an external antenna to avoid hacking an [external antenna mod](https://www.youtube.com/watch?v=o4mtrueU6eM)). This thing sports a single RISC-V core running at 160 MHz. This sounds feeble but in reality is is [slightly faster](https://github.com/nopnop2002/esp-idf-benchmark) (at least in Dhrystones) than the ESP32-S3, and it supports 2.4 GHz [WiFi6](https://en.wikipedia.org/wiki/Wi-Fi_6) 802.11ax (up to HT20/MCS9) which was specifically engineered for IoT solutions in noisy environments. As soon as the [ESP32-C5](https://www.espressif.com/en/news/ESP32-C5) comes out and is supported by the ESP-IDF, it should be straightforward to simply do a pin-compatible upgrade to 240 MHz and 5 GHz WiFi6. 
+  * MCU: an [ESP32-C6](https://www.espressif.com/en/products/socs/esp32-c6)  based MCU with u.fl connector for an external antenna to avoid hacking an [external antenna mod](https://www.youtube.com/watch?v=o4mtrueU6eM)). This MCU sports two RISC-V cores one of which runs at 160 MHz, the other at 20 MHz (ultra-low-power). This sounds feeble but in reality is is [slightly faster](https://github.com/nopnop2002/esp-idf-benchmark) (at least in Dhrystones) than the ESP32-S3, and it supports 2.4 GHz [WiFi6](https://en.wikipedia.org/wiki/Wi-Fi_6) 802.11ax (up to HT20/MCS9) which was specifically engineered for IoT solutions in noisy environments. As soon as the [ESP32-C5](https://www.espressif.com/en/news/ESP32-C5) comes out and is supported by the ESP-IDF, it should be straightforward to simply do a pin-compatible upgrade to 240 MHz and 5 GHz WiFi6. 
 
   * ADC: AKM [AK5538VN](https://www.akm.com/eu/en/products/audio/audio-adc/ak5538vn/) 8-channel audio ADC which is [I2S / TDM](https://en.wikipedia.org/wiki/I%C2%B2S) capable. Sadly, it is not in stock at my favourite PCB maker (see **Building Prototypes** below). An 8-ch. alternative would be Cirrus Logic's CS5368 but this part uses 2 power supply voltages and much more power. Their better (low power, single supply) successor part CS5308P was announced in summer 2023 but it wasn't even available as samples in April 2024. 
 
@@ -22,8 +22,6 @@ This triggered my wish to restart my former idea with more recent components, li
 
   * some power management chips for LiPo charging and creating supply voltages.
  
-  * ultra low-power LCD or e-ink displays (SPI or I2C) for the simple user interface 
-
 Primarly for marketing reasons, everything will work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
 
 
@@ -33,7 +31,7 @@ The combo will be using a private WiFi (with an arbitrary settable SSID) with th
 
 The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) 
 
-Using websockets over TCP will reduce the typical HTTP latency, but provide lost / out-of-sequence packet handling and checksumming on the TCP layer. Granted, one could use UDP which is said to provide 30 Mbps but then we would have to roll our own error handling, creating complexity and new latency. 
+Using websockets over TCP will reduce the typical HTTP latency, but provide lost / out-of-sequence packet handling and checksumming on the TCP layer. Granted, one could use UDP which is said to provide 30 Mbps but then we would have to roll our own error handling, creating complexity and new latency. In any case, I'll be experimenting with all feasible protocols to find a good trade-off. 
 
 Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. This remains to be measured which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
 
@@ -47,10 +45,10 @@ At first-order approximation, the basic functionality will look like this:
 
 
 
-##Sender
+## Sender
 
   * the sender will be the WiFi client in station mode connecting to the server via websocket.
-  * for the pairing, the user must trigger a WiFi scan on the receiver and select the desired  SSID which will stored permanently but can be changed any time later.  There will be a small display and a couple of buttons with a simple UI for this.
+  * for the pairing, the user will have to configure SSID, password and one or two features via a simple web UI.  
   * the signals E1 - E6 from the hex pickup and the normal guitar signal will be sampled by the ADC.
   * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background, and the data will be inserted in slot #7 of the TDM data stream, which is not used by audio data. 
   * the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks. Each data packet in the TDM frame will be 32 bytes long, but we may pack them into 24 to reduce the over-the-air data rate if we have spare CPU cycles. 
@@ -58,16 +56,16 @@ At first-order approximation, the basic functionality will look like this:
   * as soon as the TDM DMA buffer is read, the GK switch bits and the GKVOL value will be copied to bytes 28-31, and the resulting 32-byte buffer will be WiFi'd to the receiver. 
   * Power: a single LiPo battery of about 2500 mAh or larger if I can get one. One could use 18650 cells for example. Charging and battery voltage measurement will be handled by an equivalent of Adafruit's [PowerBoost 1000C](https://learn.adafruit.com/adafruit-powerboost-1000c-load-share-usb-charge-boost/overview) board. A charge pump and an inverter with LDOs behind them will generate +/- 7V directly from the LiPo battery for the op-amps and the GK-2A or GK-3. The ADC analog supply will be generated from the LiPo via a separate LDO. 
 
-##Receiver
+## Receiver
 
   * the receiver will work as a WiFi AP and create the private WiFi and a [websocket](https://en.wikipedia.org/wiki/WebSocket) server. Websockets are TCP based without the normal HTTP overhead, so you get checksumming, packet re-sending and packet sequencing for free. 
-  * for the pairing, the user will have to set an unsuspicious WiFi AP SSID and store it (again, There will be a small display and a couple of buttons with a simple UI for this). You can change the name any time later. This has no other function than allowing you to run several of these devices within WiFi range, e.g. on a stage. The WiFi password will probably be a hardcoded random string. Maybe I can do something with [Wi-Fi Easy Connect](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html#wi-fi-easy-connect-dpp) or WPS using a BlueTooth link. 
+  * for the pairing, the user will have to configure SSID, password and one or two features via a simple web UI. 
   * again, the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks.
   * when receiving a websocket event, the first 28 bytes of the received buffer (7 TDM slots for GK1-6 and normal guitar) are written to the DAC via I2S. Bytes 28-31 are be dissected and handled accordingly: The switch bits are written to two open drain GPIOs. The GK-VOL value is written to an PWM out to a simple low pass filter, restoring the voltage. 
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 
 
-##Potential Extensions
+## Potential Extensions
 
 I can imagine some extensions for this solution: 
 
@@ -79,7 +77,7 @@ These extensions could be optional and pluggable via flat ribbon cables or somet
 
 
 
-##Alternative Approaches
+## Alternative Approaches
 
 As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it would generally be possible to avoid a microcontroller and a WiFi in the data path, hence reducing latency, and use a generic **ISM band video transmitter** instead. The data format could be AES3 / S/PDIF based which is ideally encoded (with differential Manchester or Biphase Mark (BP-M) encoding) for use on a DC free data link. The required bandwidth for BP-M is [twice the data rate](https://www.researchgate.net/figure/PSD-for-Manchester-Coding_fig15_45914350). Said video transmitters in the 2.4 or 5.8 GHz band provide a single channel for NTSC or PAL, and provide about 6.5 MHz of video bandwidth. This limits the data rate to about 3.2 Mbps. This is just sufficient for 3 PCM streams in 44.1 kHz / 24 bit format = 3175200 bps. Which means we would need two digital interface transmitters (DITs) like TI's PCM9211 and two video transmitters on the sender, and vice versa on the receiver. But with 3+3 channels, we would have to either omit the normal guitar signal or temporarily deselect one of the GK signals as outlined on old Wireless-GK page. This makes things more expensive and requires much more power particularly on the sender. The downside is, such a construction does not provide any error correction except CRC checksumming in the S/PDIF transmitter. And everybody would have to roll their own video transmitters/receivers because FCC regulations are different everyware. Beware the cheap Chinese stuff from AliExpress for example. These things may work nicely but have no FCC certification anywhere. At least no vendor I've checked advertises anything like this. 
    

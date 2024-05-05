@@ -92,7 +92,9 @@ In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https:/
 
 The sender will have to be connected to the guitar's GK pickup by a short GK cable, and the receiver to the synth. The shortest pre-manufactured GK cables I've seen so far (on eBay) were 2 m but maybe I'll find even shorter ones. On the other hand, soldering 1 m stubs should not be a major hassle albeit somewhat fiddly. But I did that 20 years ago by cutting 5m cables and soldering a second 13-pin male connector at each half and I'm still alive. 
 
+## Sequence of Events
 
+ * 2024-05-05: ordered two ESP32-C6 DevKits, a TI PCM1808 ADC and a TI PCM5102 DAC breakout board each
 
 
 # Copyright and Licensing

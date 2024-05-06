@@ -1,6 +1,6 @@
 # Wireless-GK
 
-(last edit: May 5th, 2024)
+(last edit: May 6, 2024)
 
 Wireless-GK is a project which aims at developing a wireless alternative for Roland's famed (huh ...) GK cables. These cables are used to connect electric guitars which are equipped with a Roland GK-2A or GK-3 hexaphonic pickup to a Roland guitar synthesizer or modeller (e.g. GR-33, GR-55, VG-99 or any other of these models).  If you came here you probably know what you are looking for but anyway, if not, here's where you can get basic [information](https://en.wikipedia.org/wiki/Guitar_synthesizer#Roland_GK_interface). The cable consists of two 13-pin DIN connectors and a 13-wire cable. See the GK-3 schematics (sorry, this is the exact same blurred Roland sourced schematics that has been circulating forever...) to see the signals and wire assignments. 
 
@@ -102,6 +102,21 @@ The sender will have to be connected to the guitar's GK pickup by a short GK cab
 ## Sequence of Events
 
  * 2024-05-05: ordered two ESP32-C6 DevKits, a TI PCM1808 ADC and a TI PCM5102 DAC breakout board each
+
+## Commercial Thoughts
+
+Personally, I do not think there is a market for a wireless GK solution. For a perceived 1000 years people like Robert Fripp, Vernon
+Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them
+either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his
+proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers
+stools.)
+
+Also, in this forum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we
+all have seen. BTW I asked this guy if he could imagine to open source his prototype to enable skilled makers but got no answer (yet).
+Guess he's utterly frustrated and has no motivation to provide support for half-skilled guys messing up his stuff. Understandable.
+
+I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...)
+and hopefully community developed and supported, and I will try everything to make the device DIY safe at least for people who know how to hold a soldering iron the right way. 
 
 
 # Copyright and Licensing

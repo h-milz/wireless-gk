@@ -51,7 +51,7 @@ At first-order approximation, the basic functionality will look like this:
 
 ## Sender
 
-  * the sender will be the WiFi client in station mode connecting to the server via websocket.
+  * WiFi client or an ESP-NOW peer.
   * for the pairing, the user will have to configure some WiFi options depending on the protocol and encryption via a simple web UI.  
   * the signals E1 - E6 from the hex pickup and the normal guitar signal will be sampled by the ADC.
   * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background, and the data will be inserted in slot #7 of the TDM data stream, which is not used by audio data. 
@@ -109,17 +109,11 @@ The sender will have to be connected to the guitar's GK pickup by a short GK cab
 
 ## Commercial Thoughts
 
-Personally, I do not think there is a significant market for a wireless GK solution. For a perceived 1000 years people like Robert Fripp, Vernon Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them
-either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his
-proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers
-stools and people without cameras.)
+Personally, I do not think there is a significant market for a wireless GK solution. For a perceived 1000 years people like Robert Fripp, Vernon Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers stools and people without cameras.)
 
-Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we
-all have seen. BTW I asked this guy if he could imagine to open source his prototype to enable skilled makers but got no answer (yet).
-Guess he's utterly frustrated and has no motivation to provide support for half-skilled guys messing up his stuff. Understandable.
+Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we all have seen. BTW I asked this guy if he could imagine to open source his prototype to enable skilled makers but got no answer (yet). Guess he's utterly frustrated and has no motivation to provide support for half-skilled guys messing up his stuff. Understandable.
 
-I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...)
-and hopefully community developed and supported. Which does not mean that a group of nice people could not build and sell small batches of devices at cost price, plus support contracts for pro users.
+I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of nice people could not build and sell small batches of devices at cost price, plus support contracts for pro users.
 
 
 # Copyright and Licensing

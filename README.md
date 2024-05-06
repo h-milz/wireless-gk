@@ -27,13 +27,17 @@ Primarly for marketing reasons, everything will work with 24 bit resolution, 44.
 
 ## A Word About Using WiFi
 
-The combo will be using a private WiFi (with an arbitrary settable SSID) with the receiver as the AP and websocket server and the sender as the client, without a router in between and thus avoiding router latency. The WiFi password will probably be the same hardcoded random string. 
+In order to reduce latency, the combo will be using a private peer-to-peer WiFi with one of these configs: 
+
+ * with the receiver as the AP running a websocket server and the sender as the client, 
+ * running UDP 
+ * running ESP-NOW which was designed for hogh throughput and low latency. 
 
 The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) 
 
-Using websockets over TCP will reduce the typical HTTP latency, but provide lost / out-of-sequence packet handling and checksumming on the TCP layer. Granted, one could use UDP which is said to provide 30 Mbps but then we would have to roll our own error handling, creating complexity and new latency. In any case, I'll be experimenting with all feasible protocols to find a good trade-off. 
 
-Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. With pure UDP we may be able to get this down to small single digits but would have to add some basic error detection like XOR checksumming and packet numbering. This remains to be measured which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
+
+Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. With pure UDP or ESP-NOW we should  be able to get this down to small single digits but would have to add some basic error detection like XOR checksumming and packet numbering. This remains to be tested which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
 
 
 
@@ -48,7 +52,7 @@ At first-order approximation, the basic functionality will look like this:
 ## Sender
 
   * the sender will be the WiFi client in station mode connecting to the server via websocket.
-  * for the pairing, the user will have to configure SSID, password and one or two features via a simple web UI.  
+  * for the pairing, the user will have to configure some WiFi options depending on the protocol and encryption via a simple web UI.  
   * the signals E1 - E6 from the hex pickup and the normal guitar signal will be sampled by the ADC.
   * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background, and the data will be inserted in slot #7 of the TDM data stream, which is not used by audio data. 
   * the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks. Each data packet in the TDM frame will be 32 bytes long, but we may pack them into 24 to reduce the over-the-air data rate if we have spare CPU cycles. 
@@ -58,8 +62,8 @@ At first-order approximation, the basic functionality will look like this:
 
 ## Receiver
 
-  * the receiver will work as a WiFi AP and create the private WiFi and a [websocket](https://en.wikipedia.org/wiki/WebSocket) server. Websockets are TCP based without the normal HTTP overhead, so you get checksumming, packet re-sending and packet sequencing for free. 
-  * for the pairing, the user will have to configure SSID, password and one or two features via a simple web UI. 
+  * the receiver will work as a WiFi AP or ESP-NOW peer 
+  * for the pairing, the user will have to configure some parameters via a simple web UI. 
   * again, the ESP32 I2S controller (I2S0) will work as I2S master, generating all the required clocks.
   * when receiving a websocket event, the first 28 bytes of the received buffer (7 TDM slots for GK1-6 and normal guitar) are written to the DAC via I2S. Bytes 28-31 are be dissected and handled accordingly: The switch bits are written to two open drain GPIOs. The GK-VOL value is written to an PWM out to a simple low pass filter, restoring the voltage. 
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
@@ -79,15 +83,15 @@ These extensions could be optional and pluggable via flat ribbon cables or somet
 
 ## Alternative Approaches
 
-As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it would generally be possible to avoid a microcontroller and a WiFi in the data path, hence reducing latency, and use a generic **ISM band video transmitter** instead. The data format could be AES3 / S/PDIF based which is ideally encoded (with differential Manchester or Biphase Mark (BP-M) encoding) for use on a DC free data link. The required bandwidth for BP-M is [twice the data rate](https://www.researchgate.net/figure/PSD-for-Manchester-Coding_fig15_45914350). Said video transmitters in the 2.4 or 5.8 GHz band provide a single channel for NTSC or PAL, and provide about 6.5 MHz of video bandwidth. This limits the data rate to about 3.2 Mbps. This is just sufficient for 3 PCM streams in 44.1 kHz / 24 bit format = 3175200 bps. Which means we would need two digital interface transmitters (DITs) like TI's PCM9211 and two video transmitters on the sender, and vice versa on the receiver. But with 3+3 channels, we would have to either omit the normal guitar signal or temporarily deselect one of the GK signals as outlined on old Wireless-GK page. This makes things more expensive and requires much more power particularly on the sender. The downside is, such a construction does not provide any error correction except CRC checksumming in the S/PDIF transmitter. And everybody would have to roll their own video transmitters/receivers because FCC regulations are different everyware. Beware the cheap Chinese stuff from AliExpress for example. These things may work nicely but have no FCC certification anywhere. At least no vendor I've checked advertises anything like this. 
+As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it would generally be possible to avoid a microcontroller and a WiFi in the data path, hence reducing latency, and use a generic **ISM band video transmitter** instead. The data format could be AES3 / S/PDIF based which is differential Manchester or biphase-mark (BP-M) encoded for use on a DC free data link. The required bandwidth for BP-M is [twice the data rate](https://www.researchgate.net/figure/PSD-for-Manchester-Coding_fig15_45914350). Said video transmitters in the 2.4 or 5.8 GHz band provide a single channel for NTSC or PAL, and provide about 6.5 MHz of video bandwidth. This limits the data rate to about 3.2 Mbps. This is just sufficient for 3 PCM streams in 44.1 kHz / 24 bit format = 3175200 bps. Which means we would need two digital interface transmitters (DITs) like TI's PCM9211 and two video transmitters on the sender, and vice versa on the receiver. But with 3+3 channels, we would have to either omit the normal guitar signal or temporarily deselect one of the GK signals as outlined on old Wireless-GK page. This makes things more expensive and requires much more power particularly on the sender. The downside is, such a construction does not provide any error correction except CRC checksumming in the S/PDIF transmitter. And everybody would have to roll their own video transmitters/receivers because FCC regulations are different everyware. Beware the cheap Chinese stuff from AliExpress for example. These things may work nicely but have no FCC certification anywhere. At least no vendor I've checked advertises anything like this. 
    
 To keep things less complicated one could try to find a UHF transmitter with a higher bandwidth, say, 25 MHz, but I cannot find any at the moment, and they would not be free to use without an FCC license. Which may actually be what killed rockykoplik's project. (which is also why it does work using WiFi 802.11n in HT40 mode with a channel bandwidth of 40 MHz).  On the other hand for an international corporation it would be easy to build such a transmitter and receiver and get the FCC / CE certification, e.g. the likes of Sennheiser. 
 
 So no, I do not think this is a viable alternative for makers.  But feel free to propose ways to get this done. The part up to the input / output of the video transceivers should be trivial to design with the help of a low-power MCU like an Arm Cortex-M0 board. That might even work in CircuitPython because we would just shuffle a couple of ADC / DAC / DIT / DIR configuration bits and misuse the I2S port for TDM clock generation. 
 
-Another rather theoretical variant would be a purely analog one: analog frequency multiplex. For each of the 8 analog signals, take a linear VCO with a center frequency up to 6 MHz, spread these center frequencies in the 6.5 MHz band in a logarithmic-equidistant way, add the 8 resulting FM signals, feed the resulting frequency mix into your ISM video transmitter, and you are done, sender-side. On the receiver, take apart the frequency mix you get from the video receiver and feed the resulting 8 FM signals into PLLs, restoring the original audio signals. This step (taking the "video" signal apart) is critical as far as filtering because you need to make sure no residuals from neighbouring channels end up in each channel. This crosstalk would confuse the PLLs and ultimately lead to distortions.   
+Another rather theoretical variant would be a purely analog one: analog frequency multiplex. For each of the 8 analog signals, take a linear VCO with a center frequency up to 6 MHz, spread these center frequencies in the 6.5 MHz band in a logarithmic-equidistant way, add up the 8 resulting FM signals, feed the resulting frequency mix into your ISM video transmitter, and you are done, sender-side. On the receiver, take apart the frequency mix you get from the video receiver and feed the resulting 8 FM signals into PLLs, restoring the original audio signals. This step (taking the "video" signal apart) is critical as far as filtering because you need to make sure no residuals from neighbouring channels end up in each channel. This crosstalk would confuse the PLLs and ultimately lead to distortions.   
   
-In an ideal world, this would be pretty straightforward, but in reality VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. FPV gadgets aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is occasionally slightly distorted or something. 
+In an ideal world, this would be pretty straightforward, but in reality VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. FPV gadgets aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is occasionally slightly distorted or something. And we haven't even talked about the signal/noise ratio for FM conversion yet. 
 
 By the way what troubles me about my digital concept from above is that we convert the guitar and GK signals to digital, then back to analog, and the guitar synth will again convert to digital. Sadly, VGs and GRs have analog inputs... A much better way IMHO would be to do the AD conversion in the guitar, convert the resulting unipolar TDM signal to biphase-mark (in hardware using a couple of ICs or a small FPGA or ASIC) and send it over a coax or better a shielded twisted pair cable to the synth, e.g. a simple ethernet cable with more rugged connectors. Is that how the newer [Boss GK-5 interface](https://www.boss.info/us/products/gk-5/) works? Their cables only have a TRS connector at each end but 3 contacts would be sufficient for GND, Vcc and a single-ended HF signal over coax, like consumer S/PDIF. After all, they advertise this as "advanced Serial GK digital interface". 
  
@@ -95,9 +99,9 @@ By the way what troubles me about my digital concept from above is that we conve
 
 ## Building Prototypes
 
-In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have a couple of 100,000 common parts on stock. (No I am not affiliated, just a satisfied customer.)  I will try to make this thing as rebuild-proof as possible. 
+In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have a couple of 100,000 common parts on stock. (No I am not affiliated, just a satisfied customer.)  I will try to make this thing as DIY proof as possible. 
 
-The sender will have to be connected to the guitar's GK pickup by a short GK cable, and the receiver to the synth. The shortest pre-manufactured GK cables I've seen so far (on eBay) were 2 m but maybe I'll find even shorter ones. On the other hand, soldering 1 m stubs should not be a major hassle albeit somewhat fiddly. But I did that 20 years ago by cutting 5m cables and soldering a second 13-pin male connector at each half and I'm still alive. 
+The sender will have to be connected to the guitar's GK pickup by a short GK cable, and the receiver to the synth. The shortest pre-manufactured GK cables I've seen so far (on eBay) were 2 m but maybe I'll find even shorter ones. On the other hand, soldering 1 m stubs should not be a major hassle albeit somewhat fiddly. But I did that 20 years ago by cutting 5m cables and soldering a second 13-pin male connector at each half and I'm still alive. On the other hand, no one keeps us from using a different, better connector on the wireless devices.
 
 ## Sequence of Events
 
@@ -105,18 +109,17 @@ The sender will have to be connected to the guitar's GK pickup by a short GK cab
 
 ## Commercial Thoughts
 
-Personally, I do not think there is a market for a wireless GK solution. For a perceived 1000 years people like Robert Fripp, Vernon
-Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them
+Personally, I do not think there is a significant market for a wireless GK solution. For a perceived 1000 years people like Robert Fripp, Vernon Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them
 either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his
 proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers
-stools.)
+stools and people without cameras.)
 
-Also, in this forum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we
+Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we
 all have seen. BTW I asked this guy if he could imagine to open source his prototype to enable skilled makers but got no answer (yet).
 Guess he's utterly frustrated and has no motivation to provide support for half-skilled guys messing up his stuff. Understandable.
 
 I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...)
-and hopefully community developed and supported, and I will try everything to make the device DIY safe at least for people who know how to hold a soldering iron the right way. 
+and hopefully community developed and supported. Which does not mean that a group of nice people could not build and sell small batches of devices at cost price, plus support contracts for pro users.
 
 
 # Copyright and Licensing

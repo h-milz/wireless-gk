@@ -33,7 +33,7 @@ The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) 
 
 Using websockets over TCP will reduce the typical HTTP latency, but provide lost / out-of-sequence packet handling and checksumming on the TCP layer. Granted, one could use UDP which is said to provide 30 Mbps but then we would have to roll our own error handling, creating complexity and new latency. In any case, I'll be experimenting with all feasible protocols to find a good trade-off. 
 
-Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. This remains to be measured which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
+Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. With pure UDP we may be able to get this down to small single digits but would have to add some basic error detection like XOR checksumming and packet numbering. This remains to be measured which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
 
 
 
@@ -84,7 +84,13 @@ As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it w
 To keep things less complicated one could try to find a UHF transmitter with a higher bandwidth, say, 15 MHz, but I cannot find any at the moment, and they would not be free to use without an FCC license. Which may actually be what killed rockykoplik's project. (which is also why it does work using WiFi 802.11n in HT40 mode with a channel bandwidth of 40 MHz). 
 
 So no, I do not think this is a viable alternative.  But feel free to propose ways to get this done. The part up to the input / output of the video transceivers should be trivial to design with the help of a low-power MCU like an Arm Cortex-M0 board. That might even work in CircuitPython because we would just shuffle a couple of ADC / DAC / DIT / DIR configuration bits and misuse the I2S port for TDM clock generation. 
+
+Another rather theoretical variant would be a purely analog one: frequency multiplex. For each of the 8 analog signal, take a linear VCO which should work up to, say, 10 MHz, spread their center frequencies in the 6.5 KHz band in a logarithmic-equidistant way, add the 8 resulting FM signals, feed the resulting frequency mix into your ISM video transmitter, and you are done, sender-side. On the receiver, take the frequency mix you get from the video receiver apart and feed the resulting 8 FM signals into PLLs, restoring the original audio signals. This step (taking the "video" signal apart) is critical as far as filtering because you need to make sure no residuals from neighbouring channels end up in each channel. This would confuse the PLLs and hence lead to distortions.   
   
+In an ideal world, this would be pretty straightforward, but in reality VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. FPV gadgets aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is slightly distorted or something. 
+
+
+   
 
 ## Building Prototypes
 

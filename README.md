@@ -33,7 +33,7 @@ In order to reduce latency, the combo will be using a private peer-to-peer WiFi 
  * same, but running UDP instead of websockets
  * running ESP-NOW which was designed for high throughput and low latency. 
 
-The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) 
+The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) Spare cpu cycles permitting, one could compress the data format to have 24 bit slots instead of 32. 
 
 
 

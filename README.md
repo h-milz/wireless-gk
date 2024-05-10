@@ -1,22 +1,20 @@
 # Wireless-GK
 
-(last edit: May 6, 2024)
-
 Wireless-GK is a project which aims at developing a wireless alternative for Roland's famed (huh ...) GK cables. These cables are used to connect electric guitars which are equipped with a Roland GK-2A or GK-3 hexaphonic pickup to a Roland guitar synthesizer or modeller (e.g. GR-33, GR-55, VG-99 or any other of these models).  If you came here you probably know what you are looking for but anyway, if not, here's where you can get basic [information](https://en.wikipedia.org/wiki/Guitar_synthesizer#Roland_GK_interface). The cable consists of two 13-pin DIN connectors and a 13-wire cable. See the GK-3 schematics (sorry, this is the exact same blurred Roland sourced schematics that has been circulating forever...) to see the signals and wire assignments. 
 
 # Previous Attempts and Developments
 
-My first thoughts about a Wireless GK interface date back to the early 2000's. We did not have any compact microcontrollers and no WiFi back then, so what I was thinking about was a sender consisting of four 2-channel low-power audio ADCs, a 8-input controller packing the audio data into a data  stream, and a normal video transmitter.  On the receiving side, another controller would unpack the data stream to 4 stereo DACs. In principle.  Here's my old web page with the [ramble](https://www.muc.de/~hm/music/Wireless-GK/).
+My first thoughts about a Wireless GK interface date back to the early 2000's. We did not have any powerful microcontrollers and no WiFi back then, so what I was thinking about was a sender consisting of four 2-channel low-power audio ADCs, a 8-input controller packing the audio data into a data  stream, and a normal video transmitter.  On the receiving side, another controller would unpack the data stream to 4 stereo DACs. In principle.  Here's my old web page with the [ramble](https://www.muc.de/~hm/music/Wireless-GK/).
 
 I did not pursue the idea for a number of years but in April 2024, I stumbled across a [Youtube video](https://www.youtube.com/watch?v=Ek9ydo4c_C4) by a Czech guy named "rockykoplik" demoing a device he had prototyped. Sadly, this project seems to fly under the radar for some reason. The web shop is closed. In any case, an earlier post in the [VGuitarForums](https://www.vguitarforums.com/smf/index.php?msg=257890) states that the system causes a latency of 16 ms. We'll talk about latency later. 
 
 This triggered my wish to restart my former idea with more recent components, like 
 
-  * an ESP32-C5 MCU (sic!), 
+  * an ESP32-C5 MCU (sic!)
 
-  * ADC and DAC by AKM: 
+  * ADCs and DACs by AKM
 
-  * plus some low-noise op-amps like OPA4134 
+  * low-noise op-amps like OPA4134 
 
   * some power management chips for LiPo charging and creating supply voltages.
  

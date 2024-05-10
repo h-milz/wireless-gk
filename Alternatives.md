@@ -1,0 +1,17 @@
+# Alternative Approaches
+
+
+As written on my [old web page](https://www.muc.de/~hm/music/Wireless-GK/), it would generally be possible to avoid a microcontroller and a WiFi in the data path, hence reducing latency, and use a generic **ISM band video transmitter** instead. The data encoding could be differential Manchester or biphase-mark (BP-M). The required bandwidth for BP-M is [twice the data rate](https://www.researchgate.net/figure/PSD-for-Manchester-Coding_fig15_45914350) (i.e. circa 2 MHz per channel). Said video transmitters in the 2.4 or 5.8 GHz band provide a single video channel for NTSC or PAL, and provide about 6.5 MHz of video bandwidth, which makes them unfeasible for 8-channel uncompressed audio. I don't think anybody wants to schlep 2 such transmitters plus batteries on stage.  
+  
+Using a UHF transmitter with a higher modulation bandwidth (e.g. 25 MHz) would require an amateur radio license. Not feasible.  
+
+Enter HDMI. Even HDMI 1.0 supports 8-channel audio with 16 or 24 bits up to 192 kHz sample rate in I2S or DSD formats. Converter chips are readily available and well documented e.g. from Lattice. Input/output from our device would be HDMI so everybody would have to bring their own transceiver pair depending on the country. Latency? One advert for a wireless HDMI kit honestly said "signal experiences only 0.1s latency (almost real-time)".  OK, thank you, case closed.
+
+What troubles me about these concepts is that we convert the guitar and GK signals to digital, then back to analog, and the guitar synth will again convert to digital. Sadly, VGs and GRs have analog inputs... A much better way IMHO would be to do the AD conversion in the guitar, convert the resulting unipolar TDM signal to biphase-mark (in hardware using a couple of ICs or a small FPGA or ASIC) and send it over a coax or better a shielded twisted pair cable to the synth, e.g. a simple ethernet cable with more rugged connectors. Is that how the newer [Boss GK-5 interface](https://www.boss.info/us/products/gk-5/) works? Their cables only have a TRS connector at each end but 3 contacts would be sufficient for GND, Vcc and a single-ended RF signal over coax, like consumer S/PDIF. After all, they advertise this as "advanced Serial GK digital interface". 
+ 
+A rather theoretical variant would be a purely analog one: analog frequency multiplex. For each of the 7 analog signals, FM to a center frequency between, say, 1 and 6 MHz, spread these center frequencies in a logarithmic-equidistant way, add up the 7 resulting signals, feed the resulting frequency mix into your ISM video transmitter, and you are done, sender-side. On the receiver, take apart the frequency mix you get from the video receiver and FM demodulate the resulting signals individually, restoring the original audio signals. This step (taking the "video" signal apart) is critical as far as filtering because you need to make sure no residuals from neighbouring channels end up in each channel. This crosstalk would confuse the PLLs and ultimately lead to distortions.
+
+In an ideal world, this would be pretty straightforward, but in reality VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. FPV gadgets aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is occasionally slightly distorted or something. And we haven't even talked about the signal/noise ratio for FM conversion yet.
+   
+It appears that the WiFi based solution is the least bad one. 
+

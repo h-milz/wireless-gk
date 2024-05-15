@@ -6,15 +6,15 @@ Wireless-GK is a project which aims at developing a wireless alternative for Rol
 
 My first thoughts about a Wireless GK interface date back to the early 2000's. We did not have any powerful microcontrollers and no WiFi back then, so what I was thinking about was a sender consisting of four 2-channel low-power audio ADCs, a 8-input controller packing the audio data into a data  stream, and a normal video transmitter.  On the receiving side, another controller would unpack the data stream to 4 stereo DACs. In principle.  Here's my old web page with the [ramble](https://www.muc.de/~hm/music/Wireless-GK/).
 
-I did not pursue the idea for a number of years but in April 2024, I stumbled across a [Youtube video](https://www.youtube.com/watch?v=Ek9ydo4c_C4) by a Czech guy named "rockykoplik" demoing a device he had prototyped. Sadly, this project seems to fly under the radar for some reason. The web shop is closed. In any case, an earlier post in the [VGuitarForums](https://www.vguitarforums.com/smf/index.php?msg=257890) states that the system causes a latency of 16 ms. We'll talk about latency later. 
+I did not pursue the idea for a number of years but in April 2024, I stumbled across a [Youtube video](https://www.youtube.com/watch?v=Ek9ydo4c_C4) by a Czech guy named "rockykoplik" demoing a device he had prototyped. Sadly, this project seems to fly under the radar for some reason. The web shop is closed. In any case, an earlier post in the [VGuitarForums](https://www.vguitarforums.com/smf/index.php?msg=257890) states that the system causes a latency of 16 ms. Another [post](https://www.vguitarforums.com/smf/index.php?msg=251550) says 13-17 ms. We'll talk about latency later. 
 
 This triggered my wish to restart my former idea with more recent components, like 
 
-  * an ESP32-C5 MCU (sic!)
+  * an ESP32-C5 MCU (as soon as the C5 is available)
 
-  * ADCs and DACs by AKM
+  * 8-channel ADCs and DACs by AKM
 
-  * low-noise op-amps like OPA4134 
+  * low-noise / low THD op-amps like OPA4134, 4227 or 1679
 
   * some power management chips for LiPo charging and creating supply voltages.
  
@@ -54,7 +54,9 @@ I can imagine some extensions for this solution:
 
 These extensions could be optional and pluggable via flat ribbon cables or something. More ideas welcome. In any case I envision a completely open architecture where anybody can add their stuff somehow. 
 
+## Filter Design
 
+See [Filter Design](Filterdesign.md). 
 
 ## Alternative Approaches
 
@@ -64,7 +66,7 @@ See [Alternatives](Alternatives.md).
 
 In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  
 
-The sender will have to be connected to the guitar's GK pickup by a short GK cable, and the receiver to the synth. The shortest pre-manufactured GK cables I've seen so far (on eBay) were 2 m but maybe I'll find even shorter ones. On the other hand, soldering 1 m stubs should not be a major hassle albeit somewhat fiddly. But I did that 20 years ago by cutting 5m cables and soldering a second 13-pin male connector at each half and I'm still alive. On the other hand, no one keeps us from using a different, better connector on the wireless devices (e.g. a DB-15 connector).
+
 
 ## Sequence of Events
 
@@ -74,7 +76,7 @@ See [Progress](Progress.md).
 
 Personally, I do not think there is a significant market for a wireless GK solution. For what feels like 1000 years the likes of Robert Fripp, Vernon Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers stools and people without cameras.)
 
-Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we all have seen. BTW I asked this guy if he could imagine to open source his prototype to enable skilled makers but got no answer (yet). Guess he's utterly frustrated and has no motivation to provide support for half-skilled guys messing up his stuff. Understandable.
+Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we all have seen. 
 
 I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of nice people could not build and sell small batches of devices at cost price, plus support contracts for pro users.
 

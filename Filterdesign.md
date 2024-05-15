@@ -20,21 +20,23 @@ The other important aspect is input noise. I used Matlab to calculate the noise 
   
 The noise figures were calculated with the vendor data for equivalent input voltage and current, and an input resistance of R2 / R4 in parallel. The result: 
 
-| op-amp type ->                     | NJM2068| NE5532| OPA1679| OPA1612|
-|------------------------------------|--------|-------|--------|--------|
-| input noise voltage (nV/rtHz)      | --     | 5     | 4.5    | 1.1    |
-| input noise current (pA/rtHz)      | --     | 0.7   | 0.003  | 1.7    |
-| Equivalent Input Noise Voltage (µV)| 0.44   | --    | --     | --     |
-| input resistance (Ohm)             | 368.8  | 368.8 | 368.8  | 368.8  |
-| resistor noise (nV)                | 2.47   | 2.47  | 2.47   | 2.47   |
-| current noise (nV)                 | --     | 45.7  | 0.196  | 111.1  |
-| combined noise (µV)                | 0.44   | 0.88  | 0.79   | 0.22   |
+| op-amp type ->                     | NJM2068 | NE5532 | OPA1679 | OPA1612 |
+|------------------------------------|---------|--------|---------|---------|
+| input noise voltage (nV/rtHz)      | --      | 5      | 4.5     | 1.1     |
+| input noise current (pA/rtHz)      | --      | 0.7    | 0.003   | 1.7     |
+| Equivalent Input Noise Voltage (µV)| 0.44    | --     | --      | --      |
+| input resistance (Ohm)             | 368.8   | 368.8  | 368.8   | 368.8   |
+| resistor noise (nV)                | 2.47    | 2.47   | 2.47    | 2.47    |
+| current noise (nV)                 | --      | 45.7   | 0.196   | 111.1   |
+| combined noise (µV)                | 0.44    | 0.88   | 0.79    | 0.22    |
 
 The combined noise is on the order of magnitude 21 bits below the maximum input voltage of 1.85 Vpp for the AK5538, so sampling at 24 bits makes sense. 
 
 The OPA1612 appears to be the clear winner but its combined noise is just one bit better than the others, at a much higher price. Interestingly, this expensive beast has the lowest input noise density but the highest input current noise. Go figure. 
   
-So the choice is the NJM2068, also because if it's good enough for Roland (they use the chip in their input stages), then it should be good enough for us. 
+So the choice is the NJM2068, also because if it's good enough for Roland (they use the chip in the VG-99 input stage), then it should be good enough for us. I would also not mind the NE5532 because it's a known great audio op-amp, but it gives a 1 bit higher noise floor. 
+
+(Fun fact: Roland selected the NJM2115 for the GR-55, and the NJM2115's data sheet does not even mention specify input noise. And Roland use ridiculously high resistor values. As if they wanted to push the noise floor. But then, someone else even used the ancient TL084 for his filter-buffer. ...) 
 
 ## DA stage 
 

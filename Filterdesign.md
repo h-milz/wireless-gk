@@ -36,7 +36,7 @@ The OPA1612 appears to be the clear winner but its combined noise is just one bi
   
 So the choice is the NJM2068, also because if it's good enough for Roland (they use the chip in the VG-99 input stage), then it should be good enough for us. I would also not mind the NE5532 because it's a known great audio op-amp, but it gives a 1 bit higher noise floor. 
 
-(Fun fact: Roland selected the NJM2115 for the GR-55, and the NJM2115's data sheet does not even mention specify input noise. And Roland use ridiculously high resistor values. As if they wanted to push the noise floor. But then, someone else even used the ancient TL084 for his filter-buffer. ...) 
+(Fun fact: Roland selected the [NJM2115](https://www.alldatasheet.com/datasheet-pdf/pdf/7259/NJRC/NJM2115.html) for the [GR-55](https://www.joness.com/gr300/service/GR-55_SERVICE_NOTES.pdf) in 2011, and the NJM2115's equivalent input noise is about twice the one of the NJM2068.  Also, Roland used ridiculously high resistor values. As if they wanted to push the noise floor.) 
 
 ## DA stage 
 

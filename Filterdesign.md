@@ -16,7 +16,7 @@ Turned out NJM2068 and NE5532 work equally well but this came as no surprise. Be
   
 ![Input filter with NJM2068](Filter-NJM2068.png)  
   
-The other important aspect is input noise. I used Matlab to calculate the noise behaviour of NE5532, NJM2068, OPA1679 and (utterly expensive but interesting nonetheless) OPA1612. Please make sure to read the TI guideline below to understand the assumptions and the math.
+The other important aspect is input noise. I used Matlab to calculate the noise behaviour of NE5532, NJM2068, OPA1679 and (utterly expensive but interesting nonetheless) OPA1612. Please make sure to read the TI guideline below to understand the assumptions and the math. My general guideline was to make resistor values as small as feasible concerning the load driving capacity of the op-amps. 
   
 The noise figures were calculated with the vendor data for equivalent input voltage and current, and an input resistance of R2 / R4 in parallel. The result: 
 
@@ -27,14 +27,14 @@ The noise figures were calculated with the vendor data for equivalent input volt
 | Equivalent Input Noise Voltage (µV)| 0.44   | --    | --     | --     |
 | input resistance (Ohm)             | 368.8  | 368.8 | 368.8  | 368.8  |
 | resistor noise (nV)                | 2.47   | 2.47  | 2.47   | 2.47   |
-| current noise (nV)                 | --     | 45.7  | 0.196  | 11.1   |
+| current noise (nV)                 | --     | 45.7  | 0.196  | 111.1  |
 | combined noise (µV)                | 0.44   | 0.88  | 0.79   | 0.22   |
 
 The combined noise is on the order of magnitude 21 bits below the maximum input voltage of 1.85 Vpp for the AK5538, so sampling at 24 bits makes sense. 
 
-The OPA1612 appears to be the clear winner but its combined noise is just one bit better than the others, at a much higher price.   
+The OPA1612 appears to be the clear winner but its combined noise is just one bit better than the others, at a much higher price. Interestingly, this expensive beast has the lowest input noise density but the highest input current noise. Go figure. 
   
-So the choice is the NJM2068, also because if it's good enough for Roland, then it should be good enough for us. 
+So the choice is the NJM2068, also because if it's good enough for Roland (they use the chip in their input stages), then it should be good enough for us. 
 
 ## DA stage 
 

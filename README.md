@@ -10,12 +10,12 @@ I did not pursue the idea for a number of years but in April 2024, I stumbled ac
 
 This triggered my wish to restart my former idea with more recent components, like 
 
-  * an ESP32-C5 MCU (as soon as the C5 is available)
+  * an ESP32 MCU (C6, or rather the C5 as soon as it is available)
 
   * 8-channel ADCs and DACs by AKM
 
-  * low-noise / low THD op-amps like OPA4134, 4227 or 1679
-
+  * low-noise / low THD op-amps like NJM2608 or NE5532
+  
   * some power management chips for LiPo charging and creating supply voltages.
  
 Primarly for marketing reasons, everything will work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 

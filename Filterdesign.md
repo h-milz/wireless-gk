@@ -20,33 +20,41 @@ The other important aspect is input noise. I used Matlab to calculate the noise 
   
 The noise figures were calculated with the vendor data for equivalent input voltage and current, and an input resistance of R2 / R4 in parallel. The result: 
 
-| op-amp type ->                     | NJM2068 | NE5532 | OPA1679 | OPA1612 |
-|------------------------------------|---------|--------|---------|---------|
-| input noise voltage (nV/rtHz)      | --      | 5      | 4.5     | 1.1     |
-| input noise current (pA/rtHz)      | --      | 0.7    | 0.003   | 1.7     |
-| Equivalent Input Noise Voltage (µV)| 0.44    | --     | --      | --      |
-| input resistance (Ohm)             | 368.8   | 368.8  | 368.8   | 368.8   |
-| resistor noise (nV)                | 2.47    | 2.47   | 2.47    | 2.47    |
-| current noise (nV)                 | --      | 45.7   | 0.196   | 111.1   |
-| combined noise (µV)                | 0.44    | 0.88   | 0.79    | 0.22    |
+| op-amp type ->                     | NJM2068 | NE5532 | OPA1679 | OPA1612 | NJM2115 |
+|------------------------------------|---------|--------|---------|---------|---------|
+| input noise voltage (nV/rtHz)      | --      | 5      | 4.5     | 1.1     | --      |
+| input noise current (pA/rtHz)      | --      | 0.7    | 0.003   | 1.7     | --      |
+| Equivalent Input Noise Voltage (µV)| 0.44    | --     | --      | --      | ~ 2     |
+| input resistance (Ohm)             | 368.8   | 368.8  | 368.8   | 368.8   | 16.6k   |
+| resistor noise (nV)                | 2.47    | 2.47   | 2.47    | 2.47    | 16.6 (1) |
+| current noise (nV)                 | --      | 45.7   | 0.196   | 111.1   | --      |
+| combined noise (µV)                | 0.44    | 0.88   | 0.79    | 0.22    | 354     |
 
-The combined noise is on the order of magnitude 21 bits below the maximum input voltage of 1.85 Vpp for the AK5538, so sampling at 24 bits makes sense. 
+(1) at the highest gain stage -- see schematics
+
+
+The combined noise is on the order of magnitude 21 bits below the maximum input voltage swing of 1.85 Vpp for the AK5538, so sampling at 24 bits makes sense. 
 
 The OPA1612 appears to be the clear winner but its combined noise is just one bit better than the others, at a much higher price. Interestingly, this expensive beast has the lowest input noise density but the highest input current noise. Go figure. 
   
 So the choice is the NJM2068, also because if it's good enough for Roland (they use the chip in the VG-99 input stage), then it should be good enough for us. I would also not mind the NE5532 because it's a known great audio op-amp, but it gives a 1 bit higher noise floor. 
 
-(Fun fact: Roland selected the [NJM2115](https://www.alldatasheet.com/datasheet-pdf/pdf/7259/NJRC/NJM2115.html) for the [GR-55](https://www.joness.com/gr300/service/GR-55_SERVICE_NOTES.pdf) in 2011, and the NJM2115's equivalent input noise is about twice the one of the NJM2068.  Also, Roland used ridiculously high resistor values. As if they wanted to push the noise floor.) 
+(Fun fact: Roland selected the [NJM2115](https://www.alldatasheet.com/datasheet-pdf/pdf/7259/NJRC/NJM2115.html) for the [GR-55](https://www.joness.com/gr300/service/GR-55_SERVICE_NOTES.pdf) in 2011, and the NJM2115's equivalent input noise is about twice the one of the NJM2068.  Also, Roland used ridiculously high resistor values. As if they wanted to push the noise floor -- see table above.)
+
 
 ## DA stage 
 
-TBD
+The data sheet for the AK4438 (which is single-ended) proposes no lowpass filter at the output, whereas the AK4458 differential outputs and has a better THD+N ratio proposes a simple first-order filter. I will probably go for the latter, using an NJM2068 instead of the much noisier NJM2043. A single op-amp per channel will be needed for buffering anyway, so why not spend 3 capacitors compared to a simple subtracting op-amp. Although the next stage (VG-99 or GR-55 input) will low pass filtering anyway... 
 
 
 
 ## References
 
-  * [AK5538 datasheet](https://www.akm.com/content/dam/documents/products/audio/audio-adc/ak5578en/ak5578en-en-datasheet.pdf)
+  * [AK4438 DAC](https://www.akm.com/eu/en/products/audio/audio-dac/ak4438vn/)
+  * [AK4458 DAC](https://www.akm.com/eu/en/products/audio/audio-dac/ak4458vn/)
+  * [AK5538 ADC](https://www.akm.com/eu/en/products/audio/audio-adc/ak5538vn/)
+  * [GR-55 Service Notes](https://www.joness.com/gr300/service/GR-55_SERVICE_NOTES.pdf)
+  * [VG-99 Service Manual](https://www.joness.com/gr300/service/VG-99_SERVICE.pdf) (sorry, this is the blurred version that has been circulating the net forever. If someone has a better one... ) 
   * Cirrus Application Note AN-241 [Analog Input Buffer Architectures](https://statics.cirrus.com/pubs/appNote/an241-1.pdf) 
   * Texas Instruments Application Report [Understanding Op Amp Noise in Audio Circuits](https://www.ti.com/lit/ab/sboa345/sboa345.pdf)
   * Tietze, Ulrich; Schenk, Christoph; Gamm, Eberhard: Halbleiter-Schaltungstechnik, 16.Auflage 2019,

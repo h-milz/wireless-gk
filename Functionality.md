@@ -5,7 +5,7 @@ At first-order approximation, the basic functionality will look like this:
 
 ## Sender
 
-  * WiFi client or an ESP-NOW peer.
+  * the sender will work as a WiFi station or ESP-NOW peer.
   * for the pairing, the user will have to configure some WiFi options depending on the protocol and encryption via a simple web UI.  
   * the signals E1 - E6 from the hex pickup and the normal guitar signal will be sampled by the ADC.
   * the two GK switches will be read via GPIO, the GK VOL voltage will be AD converted by an internal ADC of the ESP32 every, say, 100ms in the background, and the data will be inserted in slot #7 of the TDM data stream, which is not used by audio data. 

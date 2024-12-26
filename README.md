@@ -32,13 +32,13 @@ In order to reduce latency, the combo will be using a private peer-to-peer WiFi 
 
 The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) Spare cpu cycles permitting, one could compress the data format to have 24 bit slots instead of 32. 
 
-Speaking of which, with a private P2P WiFi and  under reasonably good environmental conditions we should end up with a latency of 5-15 ms. With pure UDP or ESP-NOW we should  be able to get this down to small single digits but would have to add some basic error detection like XOR checksumming and packet numbering. This remains to be tested which is the first step I'll do as soon as the development boards arrive (i.e. raise a GPIO in the sender, then send a couple hundred 32 byte packets one way, then on the receiver pick up the packets and raise a GPIO when finished. Measure the time between the GPIOs with my oscilloscope).  
+ESP-NOW turned out to not be usable - firstly it supports only a default net datarate of 1 Mbps, and secondly there is no authentication at all. The protocol does provide encryption but the receiver will happily accept all packets sent to him. The only thing you can do is embed a HMAC authentication in your own protocol, but this will still open the door for denial-of-service. Which, in a stage scenario, is not something you want to deal with. (This is a major architectural failure if you ask me.)   
+  
+Websockets have a higher protocol overhead compared to UDP, so it's UDP, and that's what most if not all audio streaming protocols use. 
 
-To keep latency caused by the protocol overhead down, one can collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay which, for 10 sample batches, is about 0.2 ms. Presumably, when doing this, the latency caused by this delay will go up, but the latency caused by protocol overhead will go down _per frame_. During development, I will experiment with Websockets, UDP and ESP-NOW and try to find this sweet spot in terms of per-frame latency. 
-
+To keep latency caused by the protocol overhead low, one can collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay which, for 10 sample batches, is about 0.2 ms. Presumably, when doing this, the latency caused by this delay will go up, but the latency caused by protocol overhead will go down _per frame_. The sweet spot seems to be at packing 48 samples before sending, which keeps the interrupt rate low enough to not lose any packets in my tests, and the latency using a ESP32-C6 pair was 1088µs (sic!) sending 918 packets/s or 1360µs for 60 samples at 735 packets/s. It will be interesting to see how the C5 performs given that is has a 50 percent higher clock rate to begin with. 
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
-
 
 At first-order approximation, the basic functionality will look described in the [Functionality](Functionality.md) section. 
 

@@ -23,4 +23,3 @@ At first-order approximation, the basic functionality will look like this:
   * when receiving a checksum error on a sample, the previous sample will be repeated for example (for UDP or ESP-NOW)
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 
-

@@ -36,14 +36,14 @@ The combined noise is on the order of magnitude 21 bits below the maximum input 
 
 The OPA1612 appears to be the clear winner in numbers but its combined noise is just one bit better than the others, at a much higher price. Interestingly, this expensive beast has the lowest input noise density but the highest input current noise. Go figure. 
   
-So the choice is the NJM2068 (which Roland used in the VG-99 input stage). I would also not mind the NE5532 because it's a known great audio op-amp, but it gives a 1 bit higher noise floor. A good alternative is the NJM4580 which has a similar noise floor but slightly better THD. All three op-amps are pretty close and can be used interchangably in this simple circuit. 
+So the choice is the NJM2068 (which Roland used in the VG-99 input stage, and, by the way, in the GK-3 itself). I would also not mind the NE5532 because it's a known great audio op-amp, but it gives a 1 bit higher noise floor. A good alternative is the NJM4580 which has a similar noise floor but slightly better THD. All three op-amps are pretty close and can be used interchangably in this simple circuit. 
 
 (N.B. Roland selected the [NJM2115](https://www.alldatasheet.com/datasheet-pdf/pdf/7259/NJRC/NJM2115.html) for the GR-55 in 2011, and  the NJM2115's equivalent input noise is in the same ballpark as the NE5532's in their circuit, bt only in the lowest gain stage. The chip is no longer recommended for new designs though, and I see no reason why I would.)
 
 
 ## DA stage 
 
-The data sheet for the AK4438VN (which is single-ended) proposes no lowpass filter at the output, whereas the AK4458VN (differential outputs) which has a better THD+N ratio proposes a simple first-order filter. I will probably go for the latter, using an NJM2068 instead of the much noisier NJM2043. A single op-amp per channel will be needed for buffering anyway, so why not spend 3 capacitors compared to a simple subtracting op-amp. Although the next stage (VG-99 or GR-55 input) will low pass filtering anyway... 
+The data sheet for the AK4438VN (which is single-ended) proposes no lowpass filter at the output, whereas the AK4458VN (differential outputs) which has a better THD+N ratio proposes a simple first-order filter. I will probably go for the latter, using an NJM2068 instead of the much noisier NJM2043. A single op-amp per channel will be needed for buffering anyway, so why not spend 3 capacitors compared to a simple subtracting op-amp. Although the next stage (VG-99 or GR-55 input) will low pass filter anyway... 
 
 
 

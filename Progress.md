@@ -1,5 +1,9 @@
 # Progress 
 
+2024-12-26
+
+ * ordered ESP32-C5 DevKit early samples from Espressif :-) 
+
 2024-05-24
 
  * C6 boards arrived, first benchmarks measuring simple math performance in comparison to S2 and S3. 

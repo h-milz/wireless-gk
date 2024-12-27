@@ -18,7 +18,7 @@ This triggered my wish to restart my former idea with more recent components, li
   
   * some power management chips for LiPo charging and creating supply voltages.
  
-Primarly for marketing reasons, everything will work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
+Primarly for marketing reasons, everything is supposed to work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
 
 Please check the [Components](Components.md) file for more information. 
 
@@ -30,9 +30,9 @@ In order to reduce latency, the combo will be using a private peer-to-peer WiFi 
  * same, but running UDP instead of websockets
  * running ESP-NOW which was designed for high throughput and low latency. 
 
-The net WiFi data rate is 8 channels x 44.1 kHz x 32 byte (I2S TDM data format) = 11289600 bps, which is well within the theoretical net data rate for WiFi6 / MCS9. (Although the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/v5.2.1/esp32c6/api-guides/wifi.html) 20 Mbps for TCP and 30 for UDP - guess that's a copy&paste error from earlier architectures.) Spare cpu cycles permitting, one could compress the data format to have 24 bit slots instead of 32. 
+The net WiFi data rate is 8 channels x 32 bytes per channel x 44100 samples per second (I2S TDM data format) = 11.2896 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS9_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t)-- the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-guides/wifi.html#how-to-configure-parameters) ~40 Mbit/s for UDP. Spare cpu cycles permitting, one could compress the data format to effectively have 24 bit slots instead of 32, reducing the net data rate by 25 percent. (measurements on the C6 showed that this takes about 0.3µs per sample.)
 
-ESP-NOW turned out to not be usable - firstly it supports only a default net datarate of 1 Mbps, and secondly there is no authentication at all. The protocol does provide encryption but the receiver will happily accept all packets sent to him. The only thing you can do is embed a HMAC authentication in your own protocol, but this will still open the door for denial-of-service. Which, in a stage scenario, is not something you want to deal with. (This is a major architectural failure if you ask me.)   
+ESP-NOW turned out to not be usable - firstly it supports only a default net datarate of 1 Mbps, and secondly there is no authentication at all. The protocol does provide encryption but the receiver will happily accept all packets sent to him. The only thing you can do is embed a HMAC authentication in your own protocol, but this will still open the door for denial-of-service. Which, in a stage scenario, is not something you want to deal with. (This is a major architectural failure if you ask me.)   Thirdly, the maximum payload per frame is 250 bytes, which doesn't help to reduce the interrupt rate. 
   
 Websockets have a higher protocol overhead compared to UDP, so it's UDP, and that's what most if not all audio streaming protocols use. 
 
@@ -42,17 +42,10 @@ At the end of the day you need to choose between the devil and the deep blue sea
 
 At first-order approximation, the basic functionality will look described in the [Functionality](Functionality.md) section. 
 
+## User Interface
 
+See [User Interface](Userinterface.md). 
 
-## Potential Extensions
-
-I can imagine some extensions for this solution: 
-
-  * [Roland US-20](https://www.roland.com/global/products/us-20/) functionality in the receiver. It would be trivial to add a second or more 13-pin outputs and switch between them, even using the GK-2A or switches, or extra switches in the sender.
-  * [RMC fanout box](https://www.rmcpickup.com/fanoutbox.html) functionality in the receiver. Trivial as well. 
-  * [RMC subsonic filtering](https://www.joness.com/gr300/Filter-Buffer.htm) in the sender, removing the need for a VG-99 mod when using a piezo pickup equipped guitar. 
-
-These extensions could be optional and pluggable via flat ribbon cables or something. More ideas welcome. In any case I envision a completely open architecture where anybody can add their stuff somehow. 
 
 ## Filter Design
 
@@ -62,9 +55,19 @@ See [Filter Design](Filterdesign.md).
 
 See [Alternatives](Alternatives.md). 
 
+## Potential Extensions
+
+I can imagine some extensions for this solution, mostly receiver-side: 
+
+  * [Roland US-20](https://www.roland.com/global/products/us-20/) functionality. It would be trivial to add a second or more 13-pin outputs and switch between them, even using the GK-2A or switches, or extra switches in the sender.
+  * [RMC fanout box](https://www.rmcpickup.com/fanoutbox.html) functionality. Trivial as well. 
+  * [RMC subsonic filtering](https://www.joness.com/gr300/Filter-Buffer.htm), removing the need for a VG-99 mod when using a piezo pickup equipped guitar. 
+
+These extensions could be optional and pluggable via flat ribbon cables or something. More ideas welcome. In any case I envision a completely open architecture where anybody can add their stuff somehow. 
+
 ## Building Prototypes
 
-In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  
+In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
 
 
 

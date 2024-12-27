@@ -2,7 +2,7 @@
 
 2024-12-26
 
- * ordered ESP32-C5 DevKit early samples from Espressif :-) 
+ * ordered ESP32-C5 DevKit early samples from Espressif :-) They are supposed to arrived at the end of Jan 2025. 
 
 2024-05-24
 

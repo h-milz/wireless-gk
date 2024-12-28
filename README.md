@@ -1,6 +1,6 @@
 # Wireless-GK
 
-Wireless-GK is a project which aims at developing a wireless alternative for Roland's famed (huh ...) GK cables. These cables are used to connect electric guitars which are equipped with a Roland GK-2A or GK-3 hexaphonic pickup to a Roland guitar synthesizer or modeller (e.g. GR-33, GR-55, VG-99 or any other of these models).  If you came here you probably know what you are looking for but anyway, if not, here's where you can get basic [information](https://en.wikipedia.org/wiki/Guitar_synthesizer#Roland_GK_interface). The cable consists of two 13-pin DIN connectors and a 13-wire cable. See the [GK-3 schematics](GK-3-schematics.png). 
+Wireless-GK is a project which aims at developing a wireless alternative for Roland's famed (huh ...) GK cables. These cables are used to connect electric guitars which are equipped with a Roland GK-2A or GK-3 hexaphonic pickup to a Roland guitar synthesizer or modeller (e.g. GR-33, GR-55, VG-99 or any other of these models).  If you came here you probably know what you are looking for but anyway, if not, here's where you can get basic [information](https://en.wikipedia.org/wiki/Guitar_synthesizer#Roland_GK_interface). The cable consists of two 13-pin DIN connectors and a 13-wire cable. See the [GK-3 schematics](doc/GK-3-schematics.png). 
 
 # Previous Attempts and Developments
 
@@ -14,13 +14,13 @@ This triggered my wish to restart my former idea with more recent components, li
 
   * 8-channel ADCs and DACs by AKM
 
-  * low-noise / low THD op-amps like NJM2608 or NE5532
+  * low-noise / low THD op-amps like NJM2068 or NE5532
   
   * some power management chips for LiPo charging and creating supply voltages.
  
 Primarly for marketing reasons, everything is supposed to work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
 
-Please check the [Components](Components.md) file for more information. 
+Please check the [Components](doc/Components.md) file for more information. 
 
 ## A Word About Using WiFi
 
@@ -40,20 +40,20 @@ To keep latency caused by the protocol overhead low, one can collect a number of
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
 
-At first-order approximation, the basic functionality will look described in the [Functionality](Functionality.md) section. 
+At first-order approximation, the basic functionality will look described in the [Functionality](doc/Functionality.md) section. 
 
 ## User Interface
 
-See [User Interface](Userinterface.md). 
+See [User Interface](doc/Userinterface.md). 
 
 
 ## Filter Design
 
-See [Filter Design](Filterdesign.md). 
+See [Filter Design](doc/Filterdesign.md). 
 
 ## Alternative Approaches
 
-See [Alternatives](Alternatives.md). 
+See [Alternatives](doc/Alternatives.md). 
 
 ## Potential Extensions
 
@@ -73,7 +73,7 @@ In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https:/
 
 ## Sequence of Events
 
-See [Progress](Progress.md). 
+See [Progress](doc/Progress.md). 
 
 ## Commercial Thoughts
 

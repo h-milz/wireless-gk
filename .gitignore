@@ -53,6 +53,7 @@ dkms.conf
 
 # old stuff
 *.old
+sdkconfig
 sdkconfig.old
 build/
 Notes.txt

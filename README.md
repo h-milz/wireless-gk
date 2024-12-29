@@ -30,13 +30,13 @@ In order to reduce latency, the combo will be using a private peer-to-peer WiFi 
  * same, but running UDP instead of websockets
  * running ESP-NOW which was designed for high throughput and low latency. 
 
-The net WiFi data rate is 8 channels x 32 bytes per channel x 44100 samples per second (I2S TDM data format) = 11.2896 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS9_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t)-- the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-guides/wifi.html#how-to-configure-parameters) ~40 Mbit/s for UDP. Spare cpu cycles permitting, one could compress the data format to effectively have 24 bit slots instead of 32, reducing the net data rate by 25 percent. (measurements on the C6 showed that this takes about 0.3µs per sample.)
+The net WiFi data rate is 8 channels x 32 bytes per channel x 44100 samples per second (I2S TDM data format) = 11.2896 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS9_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t)-- the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-guides/wifi.html#how-to-configure-parameters) ~40 Mbit/s for UDP. Spare cpu cycles permitting, one could pack the data format to effectively have 24 bit slots instead of 32, reducing the net data rate by 25 percent. (measurements on the C6 showed that this takes about 0.3µs per sample.)
 
 ESP-NOW turned out to not be usable - firstly it supports only a default net datarate of 1 Mbps, and secondly there is no authentication at all. The protocol does provide encryption but the receiver will happily accept all packets sent to him. The only thing you can do is embed a HMAC authentication in your own protocol, but this will still open the door for denial-of-service. Which, in a stage scenario, is not something you want to deal with. (This is a major architectural failure if you ask me.)   Thirdly, the maximum payload per frame is 250 bytes, which doesn't help to reduce the interrupt rate. 
   
 Websockets have a higher protocol overhead compared to UDP, so it's UDP, and that's what most if not all audio streaming protocols use. 
 
-To keep latency caused by the protocol overhead low, one can collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay which, for 10 sample batches, is about 0.2 ms. Presumably, when doing this, the latency caused by this delay will go up, but the latency caused by protocol overhead will go down _per frame_. The sweet spot seems to be at packing 48 samples before sending, which keeps the interrupt rate low enough to not lose any packets in my tests, and the latency using a ESP32-C6 pair was 1088µs (sic!) sending 918 packets/s or 1360µs for 60 samples at 735 packets/s. It will be interesting to see how the C5 performs given that is has a 50 percent higher clock rate to begin with. 
+To keep latency caused by the protocol overhead low, one can collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay which, for 10 sample batches, is about 0.2 ms. Presumably, when doing this, the latency caused by this delay will go up, but the latency caused by protocol overhead will go down _per frame_. The sweet spot seems to be at packing 48 samples before sending, which keeps the interrupt rate low enough to not lose any packets in my tests, and the **measured latency using a ESP32-C6 pair** was 1.088 ms (sic!) sending 918 packets/s or 1.360 ms for 60 samples at 735 packets/s. It will be interesting to see how the C5 performs given that is has a 50 percent higher clock rate, but the base latency will be (60 samples) / (44100 samples / s) = 1.36 ms.
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
 
@@ -65,24 +65,23 @@ I can imagine some extensions for this solution, mostly receiver-side:
 
 These extensions could be optional and pluggable via flat ribbon cables or something. More ideas welcome. In any case I envision a completely open architecture where anybody can add their stuff somehow. 
 
-## Building Prototypes
-
-In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
-
-
-
-## Sequence of Events
-
-See [Progress](doc/Progress.md). 
-
 ## Commercial Thoughts
 
 Personally, I do not think there is a significant market for a wireless GK solution. For what feels like 1000 years the likes of Robert Fripp, Vernon Reid or Adrian Belew, just to name a few, played their cabled GK equipment on stage without any apparent problem. And none of them either attempted or managed to talk Roland or any 3rd party into making a custom system for them (remember Bob Bradshaw and his proverbial floorboards?). At least not as far as I'm aware. (Well Robert Fripp isn't known for walking on stage anyway - he prefers stools and people without cameras.)
 
 Also, in the VGuitarForum, not even 350 people could be found to crowdfund a solution that looked like well prototyped in the YT videos we all have seen. 
 
-I'm not going to make any attempt to market something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of nice people could not build and sell small batches of devices at cost price, plus support contracts for pro users.
+## Building Prototypes
 
+In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
+
+I'm not going to make any attempt to commercialize something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of dedicated people could not build and ship small batches of devices at cost price, plus support contracts for pro users, as long as the prerequisites of the [LICENSE](LICENSE) are observed. If you want to participate, please be familiar with the ESP-IDF and Github. 
+
+There is one more issue to **commercial distribution**. Although the individual ESP32 modules and dev boards are FCC and CE certified, marketing a compound device using such a module requires **certification** of the whole device, which can be time-consuming and extremely costly (which presumably killed the previously mentioned solution). Should I ever ship pre-built (and fully tested!) devices, then they will be preassembled kits without ESP module and LiIon battery, but with comprehensive instructions how to complete the device. The final steps involve purchasing the appropriate ESP modules and a battery, flash the modules using your computer and a USB cable, plug them in the printed circuit boards, plug the battery in the sender, and you should be ready to go. If anyone has a simpler idea, feel free to comment! 
+
+## Sequence of Events
+
+See [Progress](doc/Progress.md). 
 
 # Copyright and Licensing
 

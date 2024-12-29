@@ -9,6 +9,8 @@
   * a couple of low-noise op-amps like NE5532 or NJM2068. (available everywhere)
 
   * some power management chips for LiPo charging and creating supply voltages.
+
+  * attaching the device will require a short GK cable of about 50 cm length. Such cables seem not to be available on the market, which means we will have to make our own stubs. In this case, as an option we could use 15-pin DB connectors (VGA connectors) which are much more rugged and smaller. 
  
 
 ## Sample Rate

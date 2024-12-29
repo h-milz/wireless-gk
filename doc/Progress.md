@@ -1,5 +1,13 @@
 # Progress 
 
+2024-12-29
+
+ * time measurement; buffer compression 32 -> 24 bit, to compare 2 potential algorithms
+
+2ß24-12-28
+
+ * rearranged git repo and added ESP-IDF master branch for ESP32-C5 preview
+
 2024-12-26
 
  * ordered ESP32-C5 DevKit early samples from Espressif :-) They are supposed to arrived at the end of Jan 2025. 

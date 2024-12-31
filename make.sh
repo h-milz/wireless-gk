@@ -9,7 +9,8 @@ COMPONENTS="components/bt/host/nimble/nimble               \
             components/esp_wifi                            \
             components/esptool_py/esptool                  \
             components/lwip/lwip                           \
-            components/mbedtls/mbedtls                     "
+            components/mbedtls/mbedtls                     \
+			components/tinyusb                             "
 
 (
 cd lib/esp-idf

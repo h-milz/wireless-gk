@@ -28,7 +28,7 @@
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
 #define NUM_SLOTS               4                       // TDM256, 8 slots per sample
 #define SLOT_WIDTH              32                      // 
-#define DMA_BUFFER_COUNT        4                       // Number of DMA buffers
+#define DMA_BUFFER_COUNT        12                       // Number of DMA buffers
 #define DMA_BUFFER_SIZE         NSAMPLES * NUM_SLOTS * SLOT_WIDTH / 8  // Size of each DMA buffer
 
 #define SAMPLE_RATE             44100                   // 44100
@@ -53,16 +53,18 @@ static uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
 static i2s_chan_handle_t rx_handle = NULL;
 // static i2s_chan_handle_t tx_handle = NULL;
 
-static TaskHandle_t udp_send_task_handle; 
+static TaskHandle_t udp_tx_task_handle; 
 
 // The channel config is the same for both. 
-// static i2s_chan_config_t chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
-static i2s_chan_config_t chan_cfg = {
+static i2s_chan_config_t chan_cfg = {        // I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
     .dma_desc_num = DMA_BUFFER_COUNT,
-    .dma_frame_num = DMA_BUFFER_SIZE / (SLOT_WIDTH * NUM_SLOTS),
-    .auto_clear = true, // Automatically clear DMA buffer on underrun
+    .dma_frame_num = NSAMPLES, 
+    .auto_clear_after_cb = false, 
+    .auto_clear_before_cb = false, 
+    .allow_pd = false, 
+    .intr_priority = 5, 
 };       
 
 // I2S Rx config for the sender
@@ -70,7 +72,7 @@ static i2s_tdm_config_t rx_cfg = {
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
         .sample_rate_hz = SAMPLE_RATE,
         .clk_src = I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
-        .mclk_multiple = I2S_MCLK_MULTIPLE_256,  // Set MCLK multiple to 256
+        .mclk_multiple = I2S_MCLK_MULTIPLE_512,  // Set MCLK multiple to 256
     },
     .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_MONO,
                                                 I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3),
@@ -112,18 +114,18 @@ static i2s_std_config_t tx_cfg = {
 };
 #endif
 
-volatile int p = 0; 
+DRAM_ATTR volatile int p = 0; 
 
-#define NUM 200
+#define NUM 20
 typedef struct { 
     uint8_t loc;        // location
     uint32_t time;      // timestamp in µs
     uint8_t *ptr;       // pointer to buffer
-    uint8_t *ptr2;       // pointer to buffer
     size_t size;        // data size
+    uint32_t uint32ptr;       // converted pointer to buffer
 } log_t; 
 
-volatile log_t _log[NUM];   
+DRAM_ATTR volatile log_t _log[NUM];   
 
 // Timer configuration
 #include "driver/gptimer.h"
@@ -160,9 +162,10 @@ static IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t
     _log[p].time = get_time_us_in_isr();
     _log[p].ptr = event->dma_buf;
     _log[p].size = event->size; 
+    _log[p].uint32ptr = (uint32_t) _log[p].ptr;
     p++;
     // TODO either pass the dma_buf as (uint32_t), or we do the packing here and send the index of the udp_buf. 
-    xTaskNotifyFromISR(udp_send_task_handle, (uint32_t)_log[p].ptr, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    xTaskNotifyFromISR(udp_tx_task_handle, _log[p].uint32ptr, eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
 
@@ -171,43 +174,48 @@ static void udp_tx_task(void *args) {
     size_t size;
     uint8_t *dma_buf;
     uint8_t *ptr;
-    uint32_t ptrval;
+    uint32_t uint32ptr;
     char t[][15] = {"", "ISR", "begin loop", "channel_read", "packing", "udp send", "end loop" }; 
     
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {
         xTaskNotifyWait( 0, 
                          ULONG_MAX,
-                         &ptrval,
+                         &uint32ptr,
                          portMAX_DELAY);
         // pass the dma ptr as uint32_t
-        ptr = (uint8_t *)ptrval;
+        ptr = (uint8_t *)uint32ptr;
         // fetch the values from 1 tick earlier
         dma_buf = _log[p-1].ptr;
         size = (size_t)_log[p-1].size; 
         // we're there. 
         _log[p].loc = 5;
         _log[p].time = get_time_us_in_isr();
-        _log[p].ptr = ptr;
-        _log[p].ptr2 = dma_buf;
+        _log[p].ptr = dma_buf;
         _log[p].size = size;
+        _log[p].uint32ptr = uint32ptr;
         p++;
         // packing
         
         // checksumming
         
         // send. 
-    
-        if (p > NUM) {
+
+        // ESP_LOGI(TAG, "%s p = %d", __func__, p);
+        // printf ("%s ptr size %d\n", __func__, sizeof(ptr)); 
+        if (p >= NUM) {
+            i2s_channel_disable(rx_handle); // also stop all interrupts
             int q; 
             for (q=0; q<p; q++) {
                 switch (_log[q].loc) {
                     case 1:         // ISR
-                        printf ("%15s time %lu dma_buf 0x%08x size %lu \n", t[_log[q].loc], _log[q].time, _log[q].ptr, _log[q].size);
+                        printf("%15s time %lu uptr 0x%08lx dma_buf 0x%08lx size %u \n", 
+                                t[_log[q].loc], _log[q].time, _log[q].uint32ptr, (uint32_t) _log[q].ptr, _log[q].size);
                         break; 
                     case 5:         // UDP task
-                        printf ("%15s time %lu diff %lu ptr 0x%08x dma_buf 0x%08x size %lu \n", 
-                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, _log[q].ptr, _log[q].ptr2, _log[q].size);
+                        printf("%15s time %lu diff %lu uptr 0x%08lx dma_buf 0x%08lx size %u \n", 
+                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, 
+                                _log[q].uint32ptr, (uint32_t) _log[q].ptr, _log[q].size);
                         break;
                     default:
                         break;                        
@@ -216,6 +224,7 @@ static void udp_tx_task(void *args) {
             }
             vTaskDelete(NULL); 
         }
+
     
         
     
@@ -223,7 +232,7 @@ static void udp_tx_task(void *args) {
 
 }
 
-
+#include "i2s_private.h" 
 
 void app_main(void) {
     // int i, n;
@@ -280,19 +289,33 @@ void app_main(void) {
         i2s_channel_init_tdm_mode(rx_handle, &rx_cfg);
 
         // create UDP sender task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_send_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
         
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {
             .on_recv = i2s_rx_callback,
-            .on_recv_q_ovf = NULL; 
+            .on_recv_q_ovf = NULL,
             .on_sent = NULL,
             .on_send_q_ovf = NULL,
         };
-        i2s_channel_register_event_callback(rx_handle, &cbs, NULL));
+        i2s_channel_register_event_callback(rx_handle, &cbs, NULL);
 
         // enable channel
         i2s_channel_enable(rx_handle);
+        
+        // determine some settings. 
+        uint32_t bufsize = i2s_get_buf_size(rx_handle, SLOT_WIDTH, NSAMPLES);
+        printf ("rx_chan bufsize = %lu\n", bufsize);
+/*        
+lib/esp-idf/components/esp_driver_i2s/i2s_common.c:484:esp_err_t i2s_alloc_dma_desc(i2s_chan_handle_t handle, uint32_t num, uint32_t bufsize)
+lib/esp-idf/components/esp_driver_i2s/i2s_common.c:1383:uint32_t i2s_sync_get_fifo_count(i2s_chan_handle_t tx_handle)
+lib/esp-idf/components/esp_driver_i2s/i2s_private.h:151:struct i2s_channel_obj_t {
+SOC_I2S_SUPPORTS_APLL
+lib/esp-idf/components/esp_driver_i2s/i2s_private.h:127:} i2s_dma_t;
+*/        
+        printf ("desc_num: %lu, frame_num: %lu, buf_size: %lu\n", 
+                rx_handle->dma.desc_num, rx_handle->dma.frame_num, rx_handle->dma.buf_size);
+
         
     } else {
         // initialize Wifi AP and UDP listener
@@ -309,8 +332,10 @@ void app_main(void) {
     }
     
     // we should never end up here. 
-
-
+    // vTaskDelete(NULL);
+    while (1) {
+        vTaskDelay(500/portTICK_PERIOD_MS);
+    }
 }
 
 

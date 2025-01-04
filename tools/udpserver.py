@@ -25,8 +25,9 @@ with open(OUTPUT_FILE, "wb") as file:
         # Write data to the file
         file.write(data)
         file.flush()  # Ensure data is written to disk immediately
-        packets = (packets + 1) % 300
-        if packets == 0:
-            print (".", end="")
+        packets = packets + 1
+        # print (f"p = {packets}")
+        if packets % 300 == 0:
+            print (".", end="", flush=True)
             
 

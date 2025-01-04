@@ -23,6 +23,9 @@
 #include "driver/i2s_tdm.h"
 #include "driver/pulse_cnt.h"
 #include "rom/ets_sys.h"
+#include "lwip/err.h"
+#include "lwip/sys.h"
+
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
@@ -281,28 +284,30 @@ static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
 #define SSID "FRITZBox6660"
-#define PASS "gr9P.q7HZ.Lod9"
+#define PASS "EXAMPLE"
+
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
-#define EXAMPLE_H2E_IDENTIFIER ""
+#define H2E_IDENTIFIER ""
 #elif CONFIG_ESP_WPA3_SAE_PWE_HASH_TO_ELEMENT
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HASH_TO_ELEMENT
-#define EXAMPLE_H2E_IDENTIFIER CONFIG_ESP_WIFI_PW_ID
+#define H2E_IDENTIFIER CONFIG_ESP_WIFI_PW_ID
 #elif CONFIG_ESP_WPA3_SAE_PWE_BOTH
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_BOTH
-#define EXAMPLE_H2E_IDENTIFIER CONFIG_ESP_WIFI_PW_ID
+#define H2E_IDENTIFIER CONFIG_ESP_WIFI_PW_ID
 #endif
-#define MAX_RETRY 20
+#define MAX_RETRY 5
 
 #define WIFI_CONNECTED_BIT BIT0
 #define WIFI_FAIL_BIT      BIT1
 
-
-#ifdef CONFIG_ESP_WIFI_AUTH_WPA3_PSK
+#ifdef CONFIG_ESP_WIFI_AUTH_WPA2_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA2_WPA3_PSK
+#define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA2_WPA3_PSK
+#elif CONFIG_ESP_WIFI_AUTH_WPA3_PSK
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA3_PSK
-
-#include "lwip/err.h"
-#include "lwip/sys.h"
+#endif
 
 static void event_handler(void* arg, esp_event_base_t event_base,
                                 int32_t event_id, void* event_data)
@@ -326,7 +331,9 @@ static void event_handler(void* arg, esp_event_base_t event_base,
     }
 }
 
-static void init_wifi_sender(void *args) {
+
+// Sender is WIFI_STA
+static void init_wifi_sender(void) {
 
     s_wifi_event_group = xEventGroupCreate();
 
@@ -355,6 +362,8 @@ static void init_wifi_sender(void *args) {
         .sta = {
             .ssid = SSID,
             .password = PASS,
+            .scan_method = WIFI_ALL_CHANNEL_SCAN,
+
             /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (password len => 8).
              * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
              * to WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK and set the password with length and format matching to
@@ -362,7 +371,7 @@ static void init_wifi_sender(void *args) {
              */
             .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
             .sae_pwe_h2e = ESP_WIFI_SAE_MODE,
-            .sae_h2e_identifier = EXAMPLE_H2E_IDENTIFIER,
+            .sae_h2e_identifier = H2E_IDENTIFIER,
         },
     };
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
@@ -383,10 +392,10 @@ static void init_wifi_sender(void *args) {
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 SSID, PASS);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
-                 EXAMPLE_ESP_WIFI_SSID, EXAMPLE_ESP_WIFI_PASS);
+                 SSID, PASS);
     } else {
         ESP_LOGE(TAG, "UNEXPECTED EVENT");
     }

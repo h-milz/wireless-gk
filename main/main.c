@@ -12,6 +12,7 @@
 #include "freertos/queue.h"
 #include "freertos/task.h"
 #include "esp_event.h"
+#include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_system.h"
@@ -27,7 +28,6 @@
 #include <lwip/netdb.h>
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
-
 
 
 #define I2S_NUM                 I2S_NUM_AUTO
@@ -56,6 +56,7 @@ static const char *TAG = "wirelessGK";
 static const char *I2S_TAG = "wgk_i2s";
 static const char *UDP_TAG = "wgk_udp";
 static const char *WIFI_TAG = "wgk_wifi";
+static const char *MON_TAG = "monitor_task";
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
@@ -221,7 +222,7 @@ static void i2s_rx_task(void *args) {
 #endif        
         xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
         // convert back to pointer
-        dma_params = (dma_params_t *)evt_p;
+        dma_params = (dma_params_t *)evt_p;    // könnte man sparen, wenn man eine union nehmen würde. 
         // and fetch pointer and size
         dma_buf = dma_params->dma_buf;
         size = dma_params->size;
@@ -359,7 +360,8 @@ static void event_handler(void* arg, esp_event_base_t event_base,
 static void init_wifi_sender(void) {
 
     s_wifi_event_group = xEventGroupCreate();
-
+    esp_netif_t *netif;
+    
     ESP_ERROR_CHECK(esp_netif_init());
 
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -397,10 +399,14 @@ static void init_wifi_sender(void) {
             .sae_h2e_identifier = H2E_IDENTIFIER,
         },
     };
+
+    netif = esp_netif_get_default_netif();
+    esp_netif_set_hostname(netif, "wgk_sender");
+
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
-    esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEN?
+    esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 
@@ -439,34 +445,34 @@ static heap_trace_record_t trace_record[NUM_RECORDS];
 
 // mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
 static void udp_tx_task(void *pvParameters) {
-    char rx_buffer[128];
-    char host_ip[] = HOST_IP_ADDR;
-    int addr_family = 0;
-    int ip_protocol = 0;
+    struct sockaddr_in dest_addr;
+    struct timeval timeout;
+    int buf_size = 4096;  // UDP buffer size - adjust!
+    int err; 
 
-    heap_trace_init_standalone(trace_record, NUM_RECORDS);
-    heap_trace_start(HEAP_TRACE_ALL);
+    dest_addr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(PORT);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+
+    // heap_trace_init_standalone(trace_record, NUM_RECORDS);
+    // heap_trace_start(HEAP_TRACE_ALL);
     
     while (1) {
 
-        struct sockaddr_in dest_addr;
-        dest_addr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
-        dest_addr.sin_family = AF_INET;
-        dest_addr.sin_port = htons(PORT);
-        addr_family = AF_INET;
-        ip_protocol = IPPROTO_IP;
-
-        int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
         if (sock < 0) {
             ESP_LOGE(UDP_TAG, "Unable to create socket: errno %d", errno);
             break;
         }
 
         // Set timeout
-        struct timeval timeout;
-        timeout.tv_sec = 10;
-        timeout.tv_usec = 0;
-        setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+        setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        
+        // UDP send buffer size
+        // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
 
         ESP_LOGI(TAG, "Socket created, sending to %s:%d", HOST_IP_ADDR, PORT);
 
@@ -474,12 +480,13 @@ static void udp_tx_task(void *pvParameters) {
 
             xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY);
             
-            int err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             // ESP_LOGI(UDP_TAG, "err=%d errno=%d", err, errno);
             if (err < 0) {
         	    if (errno == ENOMEM) {
         	        ESP_LOGW(UDP_TAG, "lwip_sendto fail. %d", errno);
-        	        break; // vTaskDelay(10);
+                    ESP_LOGI (UDP_TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+        	        vTaskDelay(10);
         	    } else {
         	        ESP_LOGE(UDP_TAG, "lwip_sendto fail. %d", errno);
                     break;
@@ -516,14 +523,33 @@ static void udp_tx_task(void *pvParameters) {
             ESP_LOGE(UDP_TAG, "Shutting down socket and restarting...");
             shutdown(sock, 0);
             close(sock);
-            heap_trace_stop();
-            heap_trace_dump();
-                vTaskDelete(NULL);
+            // heap_trace_stop();
+            // heap_trace_dump();
+            // vTaskDelete(NULL);
         }
     }
     // should never be reached
     vTaskDelete(NULL);
 }
+
+
+static void monitor_task(void *pvParameters) {
+    UBaseType_t hwm; 
+    char *task_name; 
+    TaskHandle_t myself = xTaskGetCurrentTaskHandle();
+    TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, myself };
+    while (1) {
+        for (int i=0; i<sizeof(tasks)/sizeof(TaskHandle_t); i++) {
+            hwm = uxTaskGetStackHighWaterMark(tasks[i]);
+            task_name = pcTaskGetName(tasks[i]);
+            ESP_LOGI (MON_TAG, "task %s, HWM %d", task_name, hwm);
+        }
+        ESP_LOGI (MON_TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+
+        vTaskDelay (1000/portTICK_PERIOD_MS);
+    }
+}
+
 
 void app_main(void) {
     // int i, n;
@@ -586,10 +612,12 @@ void app_main(void) {
         i2s_channel_init_tdm_mode(rx_handle, &rx_cfg);
 
         // create I2S Rx task
-        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 5, &i2s_rx_task_handle);
+        xTaskCreate(i2s_rx_task, "i2s_rx_task", 1024, NULL, 4, &i2s_rx_task_handle);
     
         // create UDP Tx task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 8192, NULL, 5, &udp_tx_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 2048, NULL, 5, &udp_tx_task_handle);
+
+        xTaskCreate(monitor_task, "monitor_task", 2048, NULL, 3, NULL);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {

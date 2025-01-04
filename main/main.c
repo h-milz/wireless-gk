@@ -24,12 +24,15 @@
 #include "driver/pulse_cnt.h"
 #include "rom/ets_sys.h"
 #include "lwip/err.h"
+#include <lwip/netdb.h>
+#include "lwip/sockets.h"
 #include "lwip/sys.h"
+
 
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
-#define NUM_SLOTS               4                       // TDM256, 8 slots per sample
+#define NUM_SLOTS               2                       // TDM256, 8 slots per sample
 #define SLOT_WIDTH              32                      // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
@@ -50,19 +53,28 @@
 // #define TX_DEBUG
 
 static const char *TAG = "wirelessGK";
+static const char *I2S_TAG = "wgk_i2s";
+static const char *UDP_TAG = "wgk_udp";
+static const char *WIFI_TAG = "wgk_wifi";
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-static uint8_t i2sbuf[4 * NUM_SLOTS * NSAMPLES];
+// static uint8_t i2sbuf[4 * NUM_SLOTS * NSAMPLES];   // no longer needed, we work directly with the DMA bufs. 
 static uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
 
+// Sender
 static i2s_chan_handle_t rx_handle = NULL;
-static i2s_chan_handle_t tx_handle = NULL;
-
 static TaskHandle_t i2s_rx_task_handle; 
+static TaskHandle_t udp_tx_task_handle; 
+
+// Receiver
+static i2s_chan_handle_t tx_handle = NULL;
+static TaskHandle_t i2s_tx_task_handle; 
+static TaskHandle_t udp_rx_task_handle; 
+
 
 // The channel config is the same for both. 
-static i2s_chan_config_t rx_chan_cfg = {
+static i2s_chan_config_t i2s_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
     .dma_desc_num = DMA_BUFFER_COUNT,
@@ -73,8 +85,6 @@ static i2s_chan_config_t rx_chan_cfg = {
     .intr_priority = 5, 
 };       
 
-// TODO this will be custom too. 
-static i2s_chan_config_t tx_chan_cfg = I2S_CHANNEL_DEFAULT_CONFIG(I2S_NUM_AUTO, I2S_ROLE_MASTER);
 
 // I2S Rx config for the sender
 static i2s_tdm_config_t rx_cfg = {
@@ -85,14 +95,14 @@ static i2s_tdm_config_t rx_cfg = {
         // .ext_clk_freq_hz = 11289600,         // wenn external. Muss sein sample_rate_hz * slot_bits * slot_num
     },
     .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO,
-                                                I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
+                                                I2S_TDM_SLOT0 | I2S_TDM_SLOT1 ), // | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
 //                                                | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
     .gpio_cfg = {
         .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the ADC without crossing PCB traces. 
         .bclk = GPIO_NUM_4,
         .ws = GPIO_NUM_2,
         .dout = I2S_GPIO_UNUSED,
-        .din = GPIO_NUM_5,
+        .din = GPIO_NUM_21,
         .invert_flags = {
             .mclk_inv = false,
             .bclk_inv = false,
@@ -193,7 +203,7 @@ static void i2s_rx_task(void *args) {
     int i;
     uint32_t size;
     uint8_t *dma_buf;
-    int loops = 0, led = 0;
+    uint32_t loops = 0, led = 0;
     uint32_t evt_p;
     dma_params_t *dma_params;
     uint32_t nsamples = NSAMPLES; // default
@@ -229,10 +239,17 @@ static void i2s_rx_task(void *args) {
         // otherwise the DMA code would not have called the on_recv callback to begin with
         // but just in case it is less ... otherwise take NSAMPLES. 
         nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
-        // ESP_LOGI(TAG, "nsamples = %lu", nsamples);
+        // ESP_LOGI(I2S_TAG, "nsamples = %lu", nsamples);
         for (i=0; i<nsamples; ++i) { 
             memcpy(udpbuf+3*i, dma_buf+4*i, 3); 
         }
+        // count the first sample
+        // memcpy((uint32_t *)udpbuf, &loops, 4);
+        udpbuf[0] = (loops & 0xff0000) >> 16;
+        udpbuf[1] = (loops & 0xff00) >> 8;
+        udpbuf[2] = (loops & 0xff);
+        udpbuf[3] = 0xff;
+        udpbuf[size-1] = 0xff;
 #ifdef RX_DEBUG        
         _log[p].loc = 5;
         _log[p].time = get_time_us_in_isr(); 
@@ -243,8 +260,9 @@ static void i2s_rx_task(void *args) {
         // checksumming
         
         // send. 
-
-        // ESP_LOGI(TAG, "p = %d", p);
+        xTaskNotifyFromISR(udp_tx_task_handle, size, eSetValueWithOverwrite, NULL);
+            
+        // ESP_LOGI(I2S_TAG, "p = %d", p);
 #ifdef RX_DEBUG
         if (p >= NUM) {
             i2s_channel_disable(rx_handle); // also stop all interrupts
@@ -278,13 +296,18 @@ static void i2s_rx_task(void *args) {
     }    
 }
 
+
+/*
+ * WiFi stuff
+ */
+
 // mostly copied from examples/wifi/getting_started/station/main/station_example_main.c
 /* FreeRTOS event group to signal when we are connected*/
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_num = 0;
 
 #define SSID "FRITZBox6660"
-#define PASS "EXAMPLE"
+#define PASS "gr9P.q7HZ.Lod9"
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -318,14 +341,14 @@ static void event_handler(void* arg, esp_event_base_t event_base,
         if (s_retry_num < MAX_RETRY) {
             esp_wifi_connect();
             s_retry_num++;
-            ESP_LOGI(TAG, "retry to connect to the AP");
+            ESP_LOGI(WIFI_TAG, "retry to connect to the AP");
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
-        ESP_LOGI(TAG,"connect to the AP fail");
+        ESP_LOGI(WIFI_TAG,"connect to the AP fail");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-        ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(WIFI_TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -377,7 +400,8 @@ static void init_wifi_sender(void) {
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
-
+    esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEN?
+    
     ESP_LOGI(TAG, "wifi_init_sta finished.");
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
@@ -391,16 +415,115 @@ static void init_wifi_sender(void) {
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
-        ESP_LOGI(TAG, "connected to ap SSID:%s password:%s",
+        ESP_LOGI(WIFI_TAG, "connected to ap SSID:%s password:%s",
                  SSID, PASS);
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TAG, "Failed to connect to SSID:%s, password:%s",
+        ESP_LOGI(WIFI_TAG, "Failed to connect to SSID:%s, password:%s",
                  SSID, PASS);
     } else {
-        ESP_LOGE(TAG, "UNEXPECTED EVENT");
+        ESP_LOGE(WIFI_TAG, "UNEXPECTED EVENT");
     }
 }
 
+
+/*
+ * UDP stuff
+ */
+ 
+#define HOST_IP_ADDR "192.168.20.3" 
+#define PORT 45678
+
+#include "esp_heap_trace.h"
+#define NUM_RECORDS 100
+static heap_trace_record_t trace_record[NUM_RECORDS]; 
+
+// mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
+static void udp_tx_task(void *pvParameters) {
+    char rx_buffer[128];
+    char host_ip[] = HOST_IP_ADDR;
+    int addr_family = 0;
+    int ip_protocol = 0;
+
+    heap_trace_init_standalone(trace_record, NUM_RECORDS);
+    heap_trace_start(HEAP_TRACE_ALL);
+    
+    while (1) {
+
+        struct sockaddr_in dest_addr;
+        dest_addr.sin_addr.s_addr = inet_addr(HOST_IP_ADDR);
+        dest_addr.sin_family = AF_INET;
+        dest_addr.sin_port = htons(PORT);
+        addr_family = AF_INET;
+        ip_protocol = IPPROTO_IP;
+
+        int sock = socket(addr_family, SOCK_DGRAM, ip_protocol);
+        if (sock < 0) {
+            ESP_LOGE(UDP_TAG, "Unable to create socket: errno %d", errno);
+            break;
+        }
+
+        // Set timeout
+        struct timeval timeout;
+        timeout.tv_sec = 10;
+        timeout.tv_usec = 0;
+        setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof timeout);
+
+        ESP_LOGI(TAG, "Socket created, sending to %s:%d", HOST_IP_ADDR, PORT);
+
+        while (1) {
+
+            xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY);
+            
+            int err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            // ESP_LOGI(UDP_TAG, "err=%d errno=%d", err, errno);
+            if (err < 0) {
+        	    if (errno == ENOMEM) {
+        	        ESP_LOGW(UDP_TAG, "lwip_sendto fail. %d", errno);
+        	        break; // vTaskDelay(10);
+        	    } else {
+        	        ESP_LOGE(UDP_TAG, "lwip_sendto fail. %d", errno);
+                    break;
+                }
+    	    }
+            // ESP_LOGI(UDP_TAG, "Message sent");
+
+#if 0
+            struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
+            socklen_t socklen = sizeof(source_addr);
+            int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&source_addr, &socklen);
+
+            // Error occurred during receiving
+            if (len < 0) {
+                ESP_LOGE(UDP_TAG, "recvfrom failed: errno %d", errno);
+                break;
+            }
+            // Data received
+            else {
+                rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
+                ESP_LOGI(TAG, "Received %d bytes from %s:", len, host_ip);
+                ESP_LOGI(TAG, "%s", rx_buffer);
+                if (strncmp(rx_buffer, "OK: ", 4) == 0) {
+                    ESP_LOGI(TAG, "Received expected message, reconnecting");
+                    break;
+                }
+            }
+
+            vTaskDelay(2000 / portTICK_PERIOD_MS);
+#endif
+        }
+
+        if (sock != -1) {
+            ESP_LOGE(UDP_TAG, "Shutting down socket and restarting...");
+            shutdown(sock, 0);
+            close(sock);
+            heap_trace_stop();
+            heap_trace_dump();
+                vTaskDelete(NULL);
+        }
+    }
+    // should never be reached
+    vTaskDelete(NULL);
+}
 
 void app_main(void) {
     // int i, n;
@@ -454,16 +577,19 @@ void app_main(void) {
     init_hardware_timer();
 
     if (sender) {
-        // initialize Wifi STA and UDP
+        // initialize Wifi STA
         init_wifi_sender();
         
         // set up I2S receive channel on the Sender
-        i2s_new_channel(&rx_chan_cfg, NULL, &rx_handle);
+        i2s_new_channel(&i2s_chan_cfg, NULL, &rx_handle);
         // this will later be i2s_channel_init_tdm_mode(). 
         i2s_channel_init_tdm_mode(rx_handle, &rx_cfg);
 
-        // create UDP sender task
+        // create I2S Rx task
         xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 5, &i2s_rx_task_handle);
+    
+        // create UDP Tx task
+        xTaskCreate(udp_tx_task, "udp_tx_task", 8192, NULL, 5, &udp_tx_task_handle);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {
@@ -482,7 +608,7 @@ void app_main(void) {
         // enable_network_receiver();
         
         // set up I2S send channel on the Receiver
-        i2s_new_channel(&tx_chan_cfg, &tx_handle, NULL);
+        i2s_new_channel(&i2s_chan_cfg, &tx_handle, NULL);
         // this will later be i2s_channel_init_tdm_mode(). 
         i2s_channel_init_std_mode(tx_handle, &tx_cfg);
         // enable channel

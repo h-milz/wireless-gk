@@ -56,7 +56,7 @@ static uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
 static i2s_chan_handle_t rx_handle = NULL;
 static i2s_chan_handle_t tx_handle = NULL;
 
-static TaskHandle_t udp_tx_task_handle; 
+static TaskHandle_t i2s_rx_task_handle; 
 
 // The channel config is the same for both. 
 static i2s_chan_config_t rx_chan_cfg = {
@@ -182,11 +182,11 @@ static IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t
     p++;
 #endif
     // TODO either pass the dma_buf as (uint32_t), or we do the packing here and send the index of the udp_buf. 
-    xTaskNotifyFromISR(udp_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    xTaskNotifyFromISR(i2s_rx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
 
-static void udp_tx_task(void *args) {
+static void i2s_rx_task(void *args) {
     int i;
     uint32_t size;
     uint8_t *dma_buf;
@@ -337,7 +337,7 @@ void app_main(void) {
         i2s_channel_init_tdm_mode(rx_handle, &rx_cfg);
 
         // create UDP sender task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
+        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 5, &i2s_rx_task_handle);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {

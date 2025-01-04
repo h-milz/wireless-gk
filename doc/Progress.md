@@ -1,5 +1,11 @@
 # Progress 
 
+2025-01-04
+
+ * Wifi6 with HT20 / MCS7_SGI works. 
+ * WPA2/PSK with my FritzBox works. WPA3/PSK preferred but that seems not to work. No prio #1 task for now.
+ * sending 2 or 4 channels over UDP to Linux works in principle but I fight with ENOMEM errors from the LWIP stack, losing packets due to socket restart. 
+
 2025-01-03
 
  * working sender prototype for 4 or 8 channels, still without ADC or UDP, but that's next. 

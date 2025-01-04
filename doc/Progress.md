@@ -1,5 +1,9 @@
 # Progress 
 
+2025-01-03
+
+ * working sender prototype for 4 or 8 channels, still without ADC or UDP, but that's next. 
+
 2024-12-29
 
  * time measurement; buffer compression 32 -> 24 bit, to compare 2 potential algorithms

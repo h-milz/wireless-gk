@@ -1,8 +1,12 @@
 # Progress 
 
+2025-01-05
+
+ * overnight, the sender protoype has sent ~ 17 GB of (artificial) data to my Linux machine without any major problem. I still see occasional packet losses due to ENOMEM errors caused by UDP sendto(). The root cause is not a general lack of RAM by the way - the largest free block on the heap is constantly ~ 286k of 512k. With the C5 that has PSRAM, I need to make the LWIP buffers static anyway - we will see. 
+
 2025-01-04
 
- * Wifi6 with HT20 / MCS7_SGI works. 
+ * Wifi6 with HT20 / MCS7_SGI works. The FritzBox reports the device as connected with 81 MBit/s. 
  * WPA2/PSK with my FritzBox works. WPA3/PSK preferred but that seems not to work. No prio #1 task for now.
  * sending 2 or 4 channels over UDP to Linux works in principle but I fight with ENOMEM errors from the LWIP stack, losing packets due to socket restart. 
 

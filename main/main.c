@@ -32,7 +32,7 @@
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
-#define NUM_SLOTS               2                       // TDM256, 8 slots per sample
+#define NUM_SLOTS               4                       // TDM256, 8 slots per sample
 #define SLOT_WIDTH              32                      // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
@@ -96,7 +96,7 @@ static i2s_tdm_config_t rx_cfg = {
         // .ext_clk_freq_hz = 11289600,         // wenn external. Muss sein sample_rate_hz * slot_bits * slot_num
     },
     .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH_32BIT, I2S_SLOT_MODE_STEREO,
-                                                I2S_TDM_SLOT0 | I2S_TDM_SLOT1 ), // | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
+                                                I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
 //                                                | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
     .gpio_cfg = {
         .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the ADC without crossing PCB traces. 

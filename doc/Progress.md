@@ -3,6 +3,7 @@
 2025-01-05
 
  * overnight, the sender protoype has sent ~ 17 GB of (artificial) data to my Linux machine without any major problem. I still see occasional packet losses due to ENOMEM errors caused by UDP sendto(). The root cause is not a general lack of RAM by the way - the largest free block on the heap is constantly ~ 286k of 512k. With the C5 that has PSRAM, I need to make the LWIP buffers static anyway - we will see. 
+ * when sending a continuous stream, the C6 pulls about 110-120 mA. The C5 will likely need a bit more due to the higher clock frequency. 
 
 2025-01-04
 

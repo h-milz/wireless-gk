@@ -18,6 +18,8 @@ i2s_chan_handle_t i2s_rx_handle = NULL;
 TaskHandle_t i2s_rx_task_handle = NULL; 
 TaskHandle_t udp_tx_task_handle = NULL; 
 
+static int s_retry_num = 0;
+
 
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -142,56 +144,70 @@ void i2s_rx_task(void *args) {
     }    
 }
 
+static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_retry_num < MAX_RETRY) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TX_TAG, "retry to connect to the AP");
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        }
+        ESP_LOGI(TX_TAG,"connect to the AP fail");
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TX_TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+
 
 // Sender is WIFI_STA
 void init_wifi_tx(void) {
-
-    s_wifi_event_group = xEventGroupCreate();
-    esp_netif_t *netif;
     
     ESP_ERROR_CHECK(esp_netif_init());
-
     ESP_ERROR_CHECK(esp_event_loop_create_default());
     esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    wifi_config_t wifi_config; 
+    int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
+    if (ret == ESP_OK && wifi_config.sta.ssid[0] != '\0') {
+        // cfg is valid.
+        ESP_LOGI(TX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
+    } else {
+        ESP_LOGW(TX_TAG, "No saved Wi-Fi credentials found. Using default.");
+        memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
+        strncpy((char*)wifi_config.sta.ssid, SSID, sizeof(wifi_config.sta.ssid));
+        strncpy((char*)wifi_config.sta.password, PASS, sizeof(wifi_config.sta.password));
+        wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
+        // wifi_config.sta.sae_pwe_h2e = ESP_WIFI_SAE_MODE,    // this is for WPA3
+        // wifi_config.sta.sae_h2e_identifier = H2E_IDENTIFIER,
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // For STA mode
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+    }
+
     esp_event_handler_instance_t instance_any_id;
     esp_event_handler_instance_t instance_got_ip;
     ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
                                                         ESP_EVENT_ANY_ID,
-                                                        &event_handler,
+                                                        &wifi_sta_event_handler,
                                                         NULL,
                                                         &instance_any_id));
     ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
                                                         IP_EVENT_STA_GOT_IP,
-                                                        &event_handler,
+                                                        &wifi_sta_event_handler,
                                                         NULL,
                                                         &instance_got_ip));
 
-    wifi_config_t wifi_config = {
-        .sta = {
-            .ssid = SSID,
-            .password = PASS,
-            .scan_method = WIFI_ALL_CHANNEL_SCAN,
+    // esp_netif_t netif = esp_netif_get_default_netif();
+    // esp_netif_set_hostname(netif, "wgk_sender");
 
-            /* Authmode threshold resets to WPA2 as default if password matches WPA2 standards (password len => 8).
-             * If you want to connect the device to deprecated WEP/WPA networks, Please set the threshold value
-             * to WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK and set the password with length and format matching to
-             * WIFI_AUTH_WEP/WIFI_AUTH_WPA_PSK standards.
-             */
-            .threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD,
-            .sae_pwe_h2e = ESP_WIFI_SAE_MODE,
-            .sae_h2e_identifier = H2E_IDENTIFIER,
-        },
-    };
-
-    netif = esp_netif_get_default_netif();
-    esp_netif_set_hostname(netif, "wgk_sender");
-
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA) );
-    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config) );
     ESP_ERROR_CHECK(esp_wifi_start() );
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
@@ -209,13 +225,14 @@ void init_wifi_tx(void) {
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TX_TAG, "connected to ap SSID:%s password:%s",
-                 SSID, PASS);
+                 wifi_config.sta.ssid, wifi_config.sta.password);
     } else if (bits & WIFI_FAIL_BIT) {
         ESP_LOGI(TX_TAG, "Failed to connect to SSID:%s, password:%s",
-                 SSID, PASS);
+                 wifi_config.sta.ssid, wifi_config.sta.password);
     } else {
         ESP_LOGE(TX_TAG, "UNEXPECTED EVENT");
     }
+    
 }
 
 
@@ -224,9 +241,11 @@ void init_wifi_tx(void) {
  */
  
 
+/* 
 #include "esp_heap_trace.h"
 #define NUM_RECORDS 100
 static heap_trace_record_t trace_record[NUM_RECORDS]; 
+*/ 
 
 // mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
 void udp_tx_task(void *pvParameters) {
@@ -272,6 +291,11 @@ void udp_tx_task(void *pvParameters) {
         	        ESP_LOGW(TX_TAG, "lwip_sendto fail. %d", errno);
                     ESP_LOGI (TX_TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
         	        vTaskDelay(10);
+        	    } else if (errno == 118) {
+        	        ESP_LOGE(TX_TAG, "network not connected, errno %d", errno);
+        	        // BLINK! 
+        	        vTaskDelete(NULL);
+                    break;
         	    } else {
         	        ESP_LOGE(TX_TAG, "lwip_sendto fail. %d", errno);
                     break;
@@ -279,29 +303,6 @@ void udp_tx_task(void *pvParameters) {
     	    }
             // ESP_LOGI(TX_TAG, "Message sent");
 
-#if 0
-            struct sockaddr_storage source_addr; // Large enough for both IPv4 or IPv6
-            socklen_t socklen = sizeof(source_addr);
-            int len = recvfrom(sock, rx_buffer, sizeof(rx_buffer) - 1, 0, (struct sockaddr *)&source_addr, &socklen);
-
-            // Error occurred during receiving
-            if (len < 0) {
-                ESP_LOGE(TX_TAG, "recvfrom failed: errno %d", errno);
-                break;
-            }
-            // Data received
-            else {
-                rx_buffer[len] = 0; // Null-terminate whatever we received and treat like a string
-                ESP_LOGI(TX_TAG, "Received %d bytes from %s:", len, host_ip);
-                ESP_LOGI(TX_TAG, "%s", rx_buffer);
-                if (strncmp(rx_buffer, "OK: ", 4) == 0) {
-                    ESP_LOGI(TX_TAG, "Received expected message, reconnecting");
-                    break;
-                }
-            }
-
-            vTaskDelay(2000 / portTICK_PERIOD_MS);
-#endif
         }
 
         if (sock != -1) {

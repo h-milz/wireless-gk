@@ -17,17 +17,18 @@
 #include "esp_heap_caps.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_random.h"
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
-// #include "driver/pulse_cnt.h"
 #include "rom/ets_sys.h"
 #include "lwip/err.h"
 #include <lwip/netdb.h>
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
+#include "lwip/errno.h"
 
 // TODO remove for production
 #pragma GCC diagnostic ignored "-Wunused-variable"
@@ -61,10 +62,12 @@
 
 // WiFi stuff
 // this will later be replaced by random values created in SETUP and proliferated via WPS
-#define SSID "FRITZBox6660" // "WGK"
-#define PASS "gr9P.q7HZ.Lod9" // "start123"
+#define SSID "WGK" // "FRITZBox6660" // "WGK" // 
+#define PASS "start123"
+#define WIFI_CHANNEL 8 
+
 // UDP stuff
-#define RX_IP_ADDR "192.168.20.3" // "192.168.1.4" 
+#define RX_IP_ADDR "192.168.4.1"  // "192.168.20.3" // 
 #define PORT 45678
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK

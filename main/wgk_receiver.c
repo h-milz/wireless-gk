@@ -10,11 +10,13 @@
 #define LED_PIN                 GPIO_NUM_15             // 
 #define SETUP_PIN               GPIO_NUM_17             // take the one that is nearest to the push button
 #define SIG_PIN                 GPIO_NUM_6
-#define SIG2_PIN                GPIO_NUM_7
+#define ISR_PIN                 GPIO_NUM_6
 
 
 
 static const char *RX_TAG = "wgk_rx";
+
+DRAM_ATTR volatile uint32_t start_time = 0, stop_time = 0, diff_time = 0;
 
 i2s_chan_handle_t i2s_tx_handle = NULL;
 TaskHandle_t i2s_tx_task_handle = NULL; 
@@ -34,7 +36,6 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     _log[p].size = event->size; 
     p++;
 #endif
-    // TODO either pass the dma_buf as (uint32_t), or we do the packing here and send the index of the udp_buf. 
     xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
@@ -59,7 +60,9 @@ void i2s_tx_task(void *args) {
         _log[p].loc = 2;
         _log[p].time = get_time_us_in_isr();
         p++;
-#endif        
+#endif    
+        // here we wait for the notify from the on_sent callback
+        // assume the udpbuf is available. 
         xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
         // convert back to pointer
         dma_params = (dma_params_t *)evt_p;    // könnte man sparen, wenn man eine union nehmen würde. 
@@ -73,23 +76,26 @@ void i2s_tx_task(void *args) {
         _log[p].size = size;
         p++;
 #endif
-        // TODO read DMA buffer and unpack
+
+        // checksum? 
+        
+        // extract S1, S2
+
         // nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
         // ESP_LOGI(RX_TAG, "nsamples = %lu", nsamples);
-        for (i=0; i<nsamples; ++i) { 
-            memcpy(udpbuf+3*i, dma_buf+4*i, 3); 
+        // could result in a race condition? if udpbuf is currently written to? 
+        for (i=nsamples-1; i>=0; --i) {   
+            memcpy(dma_buf+4*i, udpbuf+3*i, 3); 
         }
+        stop_time = get_time_us_in_isr();
+        
+        
 #ifdef RX_DEBUG        
         _log[p].loc = 5;
         _log[p].time = get_time_us_in_isr(); 
         p++;
 #endif    
-        // extract S1, S2
         
-        // checksumming
-        
-        // send. 
-        xTaskNotifyFromISR(udp_rx_task_handle, size, eSetValueWithOverwrite, NULL);
             
         // ESP_LOGI(RX_TAG, "p = %d", p);
 #ifdef RX_DEBUG
@@ -125,29 +131,125 @@ void i2s_tx_task(void *args) {
     }    
 }
 
+static void wifi_ap_event_handler(void* arg, esp_event_base_t event_base,
+                                    int32_t event_id, void* event_data) {
+    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
+        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
+        ESP_LOGI(RX_TAG, "station "MACSTR" join, AID=%d",
+                 MAC2STR(event->mac), event->aid);
+    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
+        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
+        ESP_LOGI(RX_TAG, "station "MACSTR" leave, AID=%d, reason=%d",
+                 MAC2STR(event->mac), event->aid, event->reason);
+    }
+}
 
+#define MAXLEN 32
 
 void init_wifi_rx(void) {
     // we are WiFi AP 
-    // TODO and provide WPS in setup mode
-    // TODO check if credentials are available in nvs, if not, create new ones and store in nvs. 
 
+    ESP_ERROR_CHECK(esp_netif_init());
+    ESP_ERROR_CHECK(esp_event_loop_create_default());
+    esp_netif_create_default_wifi_ap();
 
-    while (1) {
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     
-    }
+    wifi_config_t wifi_config; 
+    int ret = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
+    if (ret == ESP_OK && wifi_config.ap.ssid[0] != '\0') {
+        // cfg is valid.
+        ESP_LOGI(RX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
+    } else { 
+        char ssid[MAXLEN];
+        char pass[MAXLEN];
+        // ESP_LOGW(TAG, "No saved AP configuration found. Using default.");
+        memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
+        // we will later generate a random one in SETUP 
+        snprintf (ssid, MAXLEN, "AP%08lX%08lX%c", esp_random(), esp_random(), '\0');
+        snprintf (pass, MAXLEN, "%08lX%08lX%c", esp_random(), esp_random(), '\0');
+        ESP_LOGI(RX_TAG, "generated random ssid %s pass %s", ssid, pass);
+        strncpy((char*)wifi_config.ap.ssid, SSID, sizeof(wifi_config.ap.ssid));
+        strncpy((char*)wifi_config.ap.password, PASS, sizeof(wifi_config.ap.password));
+        wifi_config.ap.ssid_len = strlen(SSID);
+        wifi_config.ap.channel = WIFI_CHANNEL;     // can we scan the net and find free channels? 
+        wifi_config.ap.max_connection = 2;  // TODO for debugging maybe, should be 1 in production
+        wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); // For STA mode
+        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config) );    
+    }         
+    
+    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
+                                                        ESP_EVENT_ANY_ID,
+                                                        &wifi_ap_event_handler,
+                                                        NULL,
+                                                        NULL));
+
+    
+    ESP_ERROR_CHECK(esp_wifi_start() );
+    esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?             
+
+    ESP_LOGI(RX_TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
+             wifi_config.ap.ssid, wifi_config.ap.password, WIFI_CHANNEL);
 
 }
 
 
+// udp_rx_task receives packets as they arrive, and puts them in udpbuf. 
+// TODO do we need multiple udpbufs as a ring buffer? to avoid race conditions
 
 void udp_rx_task(void *pvParameters) {
 
+    struct sockaddr_storage source_addr;
+    socklen_t socklen = sizeof(source_addr);
+    struct sockaddr_in dest_addr;
+    struct timeval timeout;
+    
+    dest_addr.sin_addr.s_addr = inet_addr(INADDR_ANY);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(PORT);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
 
     while (1) {
-    
-    }
 
+        int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+        if (sock < 0) {
+            ESP_LOGE(RX_TAG, "Unable to create socket: errno %d", errno);
+            break;
+        }
+
+        // Set timeout
+        setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        
+        int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        if (err < 0) {
+            ESP_LOGE(RX_TAG, "Socket unable to bind: errno %d", errno);
+        }
+        ESP_LOGI(RX_TAG, "Socket bound, port %d", PORT);
+
+        while(1) {
+
+            int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&source_addr, &socklen);
+
+            // Error occurred during receiving
+            if (len < 0) {
+                ESP_LOGE(RX_TAG, "recvfrom failed: errno %d", errno);
+                break;
+            }
+            // Data received
+            // TODO check if len == sizeof(udpbuf)
+
+        }    
+    }
+}
+
+
+// latency measurement
+static void IRAM_ATTR handle_interrupt(void *args) {
+    start_time = get_time_us_in_isr();
 }
 
 
@@ -175,14 +277,18 @@ bool init_gpio_rx (void) {
     gpio_set_intr_type(LED_PIN, GPIO_INTR_DISABLE);
     gpio_set_level(LED_PIN, 0);
 
-/*    
-    // signal pin for loop measurements with oscilloscope
-    gpio_reset_pin(SIG_PIN);
-    gpio_set_direction(SIG_PIN, GPIO_MODE_OUTPUT);
-    gpio_pullup_dis(SIG_PIN);
-    gpio_set_intr_type(SIG_PIN, GPIO_INTR_DISABLE);
-    gpio_set_level(SIG_PIN, 0);    
-*/
+    // enable the interrupt on ISR_PIN
+    gpio_reset_pin(ISR_PIN); 
+    gpio_set_direction(ISR_PIN, GPIO_MODE_INPUT);
+    gpio_set_pull_mode(ISR_PIN, GPIO_PULLUP_ONLY);
+    gpio_pullup_en(ISR_PIN);
+    gpio_set_intr_type(ISR_PIN, GPIO_INTR_POSEDGE);
+    // gpio_isr_register(handle_interrupt, NULL, ESP_INTR_FLAG_LEVEL3 | ESP_INTR_FLAG_IRAM, NULL); 
+    gpio_install_isr_service(0);
+    gpio_isr_handler_add(ISR_PIN, handle_interrupt, NULL);
+    gpio_intr_enable(ISR_PIN);
+
+
     // Returns true if setup was pressed
     return (setup_needed); 
 }

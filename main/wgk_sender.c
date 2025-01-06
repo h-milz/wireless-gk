@@ -22,6 +22,9 @@ TaskHandle_t udp_tx_task_handle = NULL;
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
+    // raise signal pin
+    gpio_set_level(SIG_PIN, 1);    
+
     // we pass the *dma_buf and size in a struct, by reference. 
     static dma_params_t dma_params;
     dma_params.dma_buf = event->dma_buf;
@@ -100,8 +103,11 @@ void i2s_rx_task(void *args) {
         // checksumming
         
         // send. 
-        xTaskNotifyFromISR(udp_tx_task_handle, size, eSetValueWithOverwrite, NULL);
+        xTaskNotifyIndexed(udp_tx_task_handle, 0, size, eSetValueWithOverwrite);
             
+        // release signal pin
+        gpio_set_level(SIG_PIN, 0);    
+
         // ESP_LOGI(RX_TAG, "p = %d", p);
 #ifdef TX_DEBUG
         if (p >= NUM) {
@@ -334,15 +340,14 @@ bool init_gpio_tx (void) {
     gpio_pullup_dis(LED_PIN);
     gpio_set_intr_type(LED_PIN, GPIO_INTR_DISABLE);
     gpio_set_level(LED_PIN, 0);
-
-/*    
+   
     // signal pin for loop measurements with oscilloscope
     gpio_reset_pin(SIG_PIN);
     gpio_set_direction(SIG_PIN, GPIO_MODE_OUTPUT);
     gpio_pullup_dis(SIG_PIN);
     gpio_set_intr_type(SIG_PIN, GPIO_INTR_DISABLE);
     gpio_set_level(SIG_PIN, 0);    
-*/
+
     // Returns true if setup was pressed
     return (setup_needed);
 }

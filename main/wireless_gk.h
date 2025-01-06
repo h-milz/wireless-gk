@@ -1,24 +1,59 @@
 /*
  * bla 
  */
- 
+
 #ifndef _WIRELESS_GK_H
 #define _WIRELESS_GK_H
 
+#include <string.h>
+#include <stdlib.h>
+#include <stdio.h> 
+#include <dirent.h> 
+#include "freertos/FreeRTOS.h"
+#include "freertos/event_groups.h"
+#include "freertos/queue.h"
+#include "freertos/task.h"
+#include "esp_event.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "esp_netif.h"
+#include "esp_system.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
+#include "nvs_flash.h"
+#include "driver/gpio.h"
+// #include "driver/pulse_cnt.h"
+#include "rom/ets_sys.h"
+#include "lwip/err.h"
+#include <lwip/netdb.h>
+#include "lwip/sockets.h"
+#include "lwip/sys.h"
+
+// TODO remove for production
+#pragma GCC diagnostic ignored "-Wunused-variable"
+
+// during development, we use STD with PCM1808 ADC and PCM5102 DAC
+#define I2S_STD
+// #define I2S_TDM
+
+#ifdef I2S_STD
+#include "driver/i2s_std.h"
+#elif I2S_TDM
+#include "driver/i2s_tdm.h"
+#endif
+
+#define I2S_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_256
+#define I2S_DATA_BIT_WIDTH I2S_DATA_BIT_WIDTH_32BIT
+
 #define I2S_NUM                 I2S_NUM_AUTO
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
-#define NUM_SLOTS               4                       // TDM256, 8 slots per sample
-#define SLOT_WIDTH              32                      // 
+#define NUM_SLOTS               2                       // TDM256, 8 slots per sample
+// #define SLOT_WIDTH              32                      // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
-#define DMA_BUFFER_SIZE         NSAMPLES * NUM_SLOTS * SLOT_WIDTH / 8  // Size of each DMA buffer
+// #define DMA_BUFFER_SIZE         NSAMPLES * NUM_SLOTS * SLOT_WIDTH / 8  // Size of each DMA buffer
 
 #define SAMPLE_RATE             44100                   // 44100
-#define LED_PIN                 GPIO_NUM_15             // 
-#define ID_PIN                  GPIO_NUM_23             // take the one that is nearest to GND
-#define SETUP_PIN               GPIO_NUM_17             // take the one that is nearest to the push button
-#define SIG_PIN                 GPIO_NUM_6
-#define SIG2_PIN                GPIO_NUM_7
 
 #ifndef MIN
 #define MIN(a,b) ((a)<(b)?(a):(b))
@@ -26,8 +61,11 @@
 
 // WiFi stuff
 // this will later be replaced by random values created in SETUP and proliferated via WPS
-#define SSID "WGK"
-#define PASS "start123"
+#define SSID "FRITZBox6660" // "WGK"
+#define PASS "gr9P.q7HZ.Lod9" // "start123"
+// UDP stuff
+#define RX_IP_ADDR "192.168.20.3" // "192.168.1.4" 
+#define PORT 45678
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
 #define ESP_WIFI_SAE_MODE WPA3_SAE_PWE_HUNT_AND_PECK
@@ -52,9 +90,11 @@
 #define ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD WIFI_AUTH_WPA3_PSK
 #endif
 
+extern EventGroupHandle_t s_wifi_event_group;
+void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
 // UDP stuff
-#define HOST_IP_ADDR "192.168.1.4" 
-#define PORT 45678
+extern uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
 
 // I2S stuff
 // The channel config is the same for both. 
@@ -67,9 +107,105 @@ static i2s_chan_config_t i2s_chan_cfg = {
     .auto_clear_before_cb = false, 
     .allow_pd = false, 
     .intr_priority = 5, 
-};       
+};    
+
+// I2S Rx config for the sender
+#ifdef I2S_STD
+static i2s_std_config_t i2s_rx_cfg = {
+#elif I2S_TDM
+static i2s_tdm_config_t i2s_rx_cfg = {
+#endif
+    .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+        .sample_rate_hz = SAMPLE_RATE,
+        .mclk_multiple = I2S_MCLK_MULTIPLE,  // Set MCLK multiple to 256
+        .clk_src = I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
+        // .ext_clk_freq_hz = 11289600,         // wenn external. Muss sein sample_rate_hz * slot_bits * slot_num
+    },
+#ifdef I2S_STD
+    .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO),
+#elif I2S_TDM
+    .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO,
+                                  I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
+//                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
+#endif
+    .gpio_cfg = {
+        .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the ADC without crossing PCB traces. 
+        .bclk = GPIO_NUM_4,
+        .ws = GPIO_NUM_2,
+        .dout = I2S_GPIO_UNUSED,
+        .din = GPIO_NUM_21,
+        .invert_flags = {
+            .mclk_inv = false,
+            .bclk_inv = false,
+            .ws_inv = true,                     // we use AK5538 mode 32/36 (start on rising WS edge)
+        },
+    },
+};
+
+   // I2S Tx Config for the Receiver
+#ifdef I2S_STD   
+static i2s_std_config_t i2s_tx_cfg = {
+#elif I2S_TDM
+static i2s_tdm_config_t i2s_tx_cfg = {
+#endif
+    .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
+        .sample_rate_hz = SAMPLE_RATE,
+        .mclk_multiple = I2S_MCLK_MULTIPLE,  // Set MCLK multiple to 256
+        .clk_src = I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
+        // .ext_clk_freq_hz = 11289600,         // wenn external. Muss sein sample_rate_hz * slot_bits * slot_num
+    },
+#ifdef I2S_STD
+    .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO),
+#elif I2S_TDM
+    .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO,
+                                  I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
+//                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
+#endif
+    .gpio_cfg = {
+        .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the DAC without crossing PCB traces. 
+        .bclk = GPIO_NUM_4,
+        .ws = GPIO_NUM_2,
+        .dout = GPIO_NUM_5,
+        .din = I2S_GPIO_UNUSED,
+        .invert_flags = {
+            .mclk_inv = false,
+            .bclk_inv = false,
+            .ws_inv = true,                     // we use AK4438 mode 14/18 (start on rising WS edge)
+        },
+    },
+};
 
 
+
+// Sender stuff
+extern i2s_chan_handle_t i2s_rx_handle;
+extern TaskHandle_t i2s_rx_task_handle; 
+extern TaskHandle_t udp_tx_task_handle; 
+void init_wifi_tx(void);
+void udp_tx_task(void *pvParameters);
+bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx); 
+void i2s_rx_task(void *args);
+bool init_gpio_tx(void);
+void tx_setup (void);
+
+// Receiver stuff
+extern i2s_chan_handle_t i2s_tx_handle;
+extern TaskHandle_t i2s_tx_task_handle; 
+extern TaskHandle_t udp_rx_task_handle; 
+void init_wifi_rx(void);
+void udp_rx_task(void *pvParameters);
+bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx); 
+void i2s_tx_task(void *args);
+bool init_gpio_rx(void);
+void rx_setup (void);
+
+// main stuff
+typedef struct { 
+    uint8_t *dma_buf;       // pointer to buffer
+    uint32_t size;        // data size
+} dma_params_t; 
+
+uint32_t get_time_us_in_isr(void);
 
 
 #endif /* _WIRELESS_GK_H */

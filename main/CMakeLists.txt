@@ -1,4 +1,4 @@
-# Embed CA, certificate & key directly into binary
-idf_component_register( SRCS "*.c"
+
+idf_component_register( SRCS "main.c" "wgk_sender.c" "wgk_receiver.c" 
                         INCLUDE_DIRS ".")
 

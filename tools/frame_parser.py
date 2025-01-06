@@ -5,9 +5,12 @@ import sys
 # Configuration
 INPUT_FILE = "i2s_data.raw"  # Replace with your file name
 SAMPLE_SIZE = 3                # Each sample is 3 bytes
-SAMPLES_PER_FRAME = 2          # 4 samples per frame
+SAMPLES_PER_FRAME = 4          # 4 samples per frame
 FRAME_SIZE = SAMPLE_SIZE * SAMPLES_PER_FRAME  # 12 bytes per frame
 
+prev_count = -1
+curr_count = 0
+sixty = False
 try:
     # Open the file in binary read mode
     with open(INPUT_FILE, "rb") as file:
@@ -23,13 +26,26 @@ try:
 
             # Split the frame into four 3-byte samples
             samples = [frame_data[i:i + SAMPLE_SIZE] for i in range(0, FRAME_SIZE, SAMPLE_SIZE)]
-
+            # print (f"------ {samples[1].hex()}")
+            if samples[1].hex() == "ff0000":
+                # print ("here")
+                curr_count = int.from_bytes(samples[0])
+                diff = curr_count - prev_count - 1
+                prev_count = curr_count
+                sixty = True
+                        
             # Convert each sample to hexadecimal
             hex_samples = [sample.hex() for sample in samples]
 
             # Print the formatted output
-            print(f"{frame_number:08d}", *hex_samples)
-
+            print(f"{frame_number:08d}", *hex_samples, end='')
+            
+            if diff != 0 and sixty:
+                print (f"  lost {diff} packets:")
+            else:
+                print ("")
+            sixty=False    
+                
             # Increment the frame number
             frame_number += 1
 

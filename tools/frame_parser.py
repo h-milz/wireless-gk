@@ -5,12 +5,13 @@ import sys
 # Configuration
 INPUT_FILE = "i2s_data.raw"  # Replace with your file name
 SAMPLE_SIZE = 3                # Each sample is 3 bytes
-SAMPLES_PER_FRAME = 4          # 4 samples per frame
+SAMPLES_PER_FRAME = 8          # 4 samples per frame
 FRAME_SIZE = SAMPLE_SIZE * SAMPLES_PER_FRAME  # 12 bytes per frame
 
 prev_count = -1
 curr_count = 0
 sixty = False
+diff = 0
 try:
     # Open the file in binary read mode
     with open(INPUT_FILE, "rb") as file:

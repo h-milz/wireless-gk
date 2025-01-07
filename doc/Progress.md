@@ -1,5 +1,10 @@
 # Progress 
 
+2025-01-07
+
+ * Hooray! The C5 DevKits arrived! ![ESP32-C5 Devkits](devkits.jpg)
+ * First tests are very promising. The device running at 160 or 240 MHz connects to my FritzBox using 5 GHz Wifi6 11AX just fine (well, most of the time - sometimes the AP offers only 11AC), and if it does, I see no packet losses with 8 slots at all. So I've got to figure out how to force the pair to always negotiate 11AX. I'll have it run overnight to see if it's stable over hours, and next is the receiver working as Wifi6 11AX AP. 
+
 2025-01-06
 
  * code split

@@ -30,6 +30,9 @@
 #include "lwip/sys.h"
 #include "lwip/errno.h"
 
+// #define TX_DEBUG
+// #define RX_DEBUG
+
 // TODO remove for production
 #pragma GCC diagnostic ignored "-Wunused-variable"
 
@@ -48,11 +51,11 @@
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define NSAMPLES                60                      // the number of samples we want to send in a batch
-#define NUM_SLOTS               2                       // TDM256, 8 slots per sample
-// #define SLOT_WIDTH              32                      // 
+#define NUM_SLOTS               8                       // TDM256, 8 slots per sample
+#define SLOT_WIDTH              32                      // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
-// #define DMA_BUFFER_SIZE         NSAMPLES * NUM_SLOTS * SLOT_WIDTH / 8  // Size of each DMA buffer
+#define DMA_BUFFER_SIZE         NSAMPLES * NUM_SLOTS * SLOT_WIDTH / 8  // Size of each DMA buffer
 
 #define SAMPLE_RATE             44100                   // 44100
 
@@ -60,14 +63,27 @@
 #define MIN(a,b) ((a)<(b)?(a):(b))
 #endif
 
+#if (defined RX_DEBUG || defined TX_DEBUG)
+#define NUM 20
+typedef struct { 
+    uint8_t loc;        // location
+    uint32_t time;      // timestamp in µs
+    uint8_t *ptr;       // pointer to buffer
+    uint32_t size;        // data size
+    uint32_t uint32ptr;       // converted pointer to buffer
+} log_t; 
+extern volatile int p;
+extern volatile log_t _log[];
+#endif 
+
 // WiFi stuff
 // this will later be replaced by random values created in SETUP and proliferated via WPS
-#define SSID "WGK" // "FRITZBox6660" // "WGK" // 
-#define PASS "start123"
+#define SSID "FRITZBox6660" // "WGK" // "FRITZBox6660" // "WGK" // 
+#define PASS "gr9P.q7HZ.Lod9" // "start123"
 #define WIFI_CHANNEL 8 
 
 // UDP stuff
-#define RX_IP_ADDR "192.168.4.1"  // "192.168.20.3" // 
+#define RX_IP_ADDR "192.168.20.3" // "192.168.4.1"  // 
 #define PORT 45678
 
 #if CONFIG_ESP_WPA3_SAE_PWE_HUNT_AND_PECK
@@ -132,11 +148,11 @@ static i2s_tdm_config_t i2s_rx_cfg = {
 //                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
 #endif
     .gpio_cfg = {
-        .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the ADC without crossing PCB traces. 
-        .bclk = GPIO_NUM_4,
-        .ws = GPIO_NUM_2,
+        .mclk = GPIO_NUM_2,                    // pick the pins that are closest to the ADC without crossing PCB traces. 
+        .bclk = GPIO_NUM_3,
+        .ws = GPIO_NUM_4,
         .dout = I2S_GPIO_UNUSED,
-        .din = GPIO_NUM_21,
+        .din = GPIO_NUM_5,
         .invert_flags = {
             .mclk_inv = false,
             .bclk_inv = false,
@@ -165,9 +181,9 @@ static i2s_tdm_config_t i2s_tx_cfg = {
 //                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
 #endif
     .gpio_cfg = {
-        .mclk = GPIO_NUM_22,                    // pick the pins that are closest to the DAC without crossing PCB traces. 
-        .bclk = GPIO_NUM_4,
-        .ws = GPIO_NUM_2,
+        .mclk = GPIO_NUM_2,                    // pick the pins that are closest to the DAC without crossing PCB traces. 
+        .bclk = GPIO_NUM_3,
+        .ws = GPIO_NUM_4,
         .dout = GPIO_NUM_5,
         .din = I2S_GPIO_UNUSED,
         .invert_flags = {

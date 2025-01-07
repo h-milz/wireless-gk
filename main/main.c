@@ -5,7 +5,7 @@
 
 #include "wireless_gk.h"
 
-#define ID_PIN                  GPIO_NUM_23             // take the one that is nearest to GND
+#define ID_PIN                  GPIO_NUM_13             // take the one that is nearest to GND
 
 static const char *TAG = "wgk_main";
 
@@ -17,17 +17,11 @@ EventGroupHandle_t s_wifi_event_group;
 uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
-#define NUM 20
-typedef struct { 
-    uint8_t loc;        // location
-    uint32_t time;      // timestamp in µs
-    uint8_t *ptr;       // pointer to buffer
-    uint32_t size;        // data size
-    uint32_t uint32ptr;       // converted pointer to buffer
-} log_t; 
 DRAM_ATTR volatile int p = 0; 
 DRAM_ATTR volatile log_t _log[NUM];   
 #endif 
+
+
 
 // Timer configuration
 #include "driver/gptimer.h"
@@ -129,7 +123,7 @@ void app_main(void) {
 #endif        
 
         // create I2S Rx task
-        xTaskCreate(i2s_rx_task, "i2s_rx_task", 1024, NULL, 4, &i2s_rx_task_handle);
+        xTaskCreate(i2s_rx_task, "i2s_rx_task", 3072, NULL, 4, &i2s_rx_task_handle);
     
         // create UDP Tx task
         xTaskCreate(udp_tx_task, "udp_tx_task", 2048, NULL, 5, &udp_tx_task_handle);

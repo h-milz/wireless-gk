@@ -4,12 +4,10 @@
  
 #include "wireless_gk.h"
 
-// #define TX_DEBUG
-
-#define LED_PIN                 GPIO_NUM_15             // 
-#define SETUP_PIN               GPIO_NUM_17             // take the one that is nearest to the push button
-#define SIG_PIN                 GPIO_NUM_6
-#define SIG2_PIN                GPIO_NUM_7
+#define LED_PIN                 GPIO_NUM_10             // 
+#define SETUP_PIN               GPIO_NUM_14             // take the one that is nearest to the push button
+#define SIG_PIN                 GPIO_NUM_8
+#define ISR_PIN                GPIO_NUM_9
 
 
 static const char *TX_TAG = "wgk_tx";
@@ -83,7 +81,8 @@ void i2s_rx_task(void *args) {
         // we can assume the passed data block is always a complete frame because
         // otherwise the DMA code would not have called the on_recv callback to begin with
         // but just in case it is less ... otherwise take NSAMPLES. 
-        // nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
+        memset(udpbuf, 0, sizeof(udpbuf));
+        nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
         // ESP_LOGI(RX_TAG, "nsamples = %lu", nsamples);
         for (i=0; i<nsamples; ++i) { 
             memcpy(udpbuf+3*i, dma_buf+4*i, 3); 
@@ -94,7 +93,7 @@ void i2s_rx_task(void *args) {
         udpbuf[1] = (loops & 0xff00) >> 8;
         udpbuf[2] = (loops & 0xff);
         udpbuf[3] = 0xff;
-        udpbuf[size-1] = 0xff;
+        // udpbuf[size-1] = 0xff;
 #ifdef TX_DEBUG        
         _log[p].loc = 5;
         _log[p].time = get_time_us_in_isr(); 
@@ -167,6 +166,7 @@ static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base, int32
 
 // Sender is WIFI_STA
 void init_wifi_tx(void) {
+    esp_err_t err; 
     
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -208,7 +208,16 @@ void init_wifi_tx(void) {
     // esp_netif_t netif = esp_netif_get_default_netif();
     // esp_netif_set_hostname(netif, "wgk_sender");
 
+
+/*
+    err = esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11AX);
+    if (err != ESP_OK) {
+        ESP_LOGW(TX_TAG, "esp_wifi_set_protocol returned err %d", err); 
+    }
+*/
     ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
+
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
     ESP_LOGI(TX_TAG, "wifi_init_sta finished.");

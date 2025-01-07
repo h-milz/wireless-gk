@@ -2,8 +2,11 @@
 
 2025-01-07
 
- * Hooray! The C5 DevKits arrived! ![ESP32-C5 Devkits](devkits.jpg)
- * First tests are very promising. The device running at 160 or 240 MHz connects to my FritzBox using 5 GHz Wifi6 11AX just fine (well, most of the time - sometimes the AP offers only 11AC), and if it does, I see no packet losses with 8 slots at all. So I've got to figure out how to force the pair to always negotiate 11AX. I'll have it run overnight to see if it's stable over hours, and next is the receiver working as Wifi6 11AX AP. 
+![ESP32-C5 Devkits](devkits.jpg)
+
+ * Hooray! The C5 DevKits arrived! 
+ * First tests are very promising. The device running at 160 or 240 MHz connects to my FritzBox using 5 GHz Wifi6 11AX just fine (well, most of the time - sometimes the AP offers only 11AC), and if it does, I see no ENOMEM induced packet losses with 8 slots at all. So I've got to figure out how to force the pair to always negotiate 11AX. I'll have it run overnight to see if it's stable over hours, and next is getting the receiver to work as Wifi6 11AX AP with WPA3. 
+ * If it connects with 11AX, it's WIFI_PHY_RATE_MCS7_SGI in HT20 mode (the FritzBox says 81 MBit/s), and it authorizes using WPA3-SAE. I don't think it can get any better than that :-) . (Too bad the chip does not support HT40 with 11AX or 11AC but that's not relevant for this application.) 
 
 2025-01-06
 

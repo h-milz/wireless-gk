@@ -37,7 +37,7 @@ static int s_retry_num = 0;
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
-    // raise signal pin
+    // raise signal pin for latency measurement
     gpio_set_level(SIG_PIN, 1);    
 
     // we pass the *dma_buf and size in a struct, by reference. 
@@ -51,16 +51,16 @@ IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     _log[p].size = event->size; 
     p++;
 #endif
-    // TODO either pass the dma_buf as (uint32_t), or we do the packing here and send the index of the udp_buf. 
+    // size is not used, so we could just transfer  (uint32_t)(event->dma_buf)
     xTaskNotifyFromISR(i2s_rx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
 
 
 void i2s_rx_task(void *args) {
-    int i;
+    int i, j;
     uint32_t size;
-    uint8_t *dma_buf;
+    uint8_t *dmabuf;
     uint32_t loops = 0, led = 0;
     uint32_t evt_p;
     dma_params_t *dma_params;
@@ -69,7 +69,8 @@ void i2s_rx_task(void *args) {
 #ifdef TX_DEBUG
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
 #endif
-    
+
+    memset(udpbuf, 0, sizeof(udpbuf));    
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
 #ifdef TX_DEBUG
@@ -79,28 +80,27 @@ void i2s_rx_task(void *args) {
 #endif        
         xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
         // convert back to pointer
-        dma_params = (dma_params_t *)evt_p;    // könnte man sparen, wenn man eine union nehmen würde. 
+        dma_params = (dma_params_t *)evt_p;    
         // and fetch pointer and size
-        dma_buf = dma_params->dma_buf;
-        size = dma_params->size;
+        dmabuf = dma_params->dma_buf;
+        size = dma_params->size;                    // size is not used, so we could just transfer the *dma_buf. 
 #ifdef TX_DEBUG        
         _log[p].loc = 3;
         _log[p].time = get_time_us_in_isr();
-        _log[p].ptr = dma_buf;
+        _log[p].ptr = dmabuf;
         _log[p].size = size;
         p++;
 #endif
         // read DMA buffer and pack
-        // instead of using i2s_channel_read() which uses the FreeRTOS queue infrastructure internally 
-        // and thus is not low latency capable, we access the last written DMA buffer directly. 
-        // we can assume the passed data block is always a complete frame because
-        // otherwise the DMA code would not have called the on_recv callback to begin with
-        // but just in case it is less ... otherwise take NSAMPLES. 
-        memset(udpbuf, 0, sizeof(udpbuf));
-        nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
-        // ESP_LOGI(RX_TAG, "nsamples = %lu", nsamples);
-        for (i=0; i<nsamples; ++i) { 
-            memcpy(udpbuf+3*i, dma_buf+4*i, 3); 
+        memset (udpbuf, 0, sizeof(udpbuf));         // clean up first
+        for (i=0; i<NFRAMES; i++) {
+            for (j=0; j<NUM_SLOTS_I2S; j++) {                
+                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
+                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                        dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
+                        SLOT_SIZE_UDP);
+            }                    
         }
         // count the first sample
         // memcpy((uint32_t *)udpbuf, &loops, 4);
@@ -232,7 +232,7 @@ void init_wifi_tx(void) {
 */
     ESP_ERROR_CHECK(esp_wifi_start() );
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
-
+    
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
     ESP_LOGI(TX_TAG, "wifi_init_sta finished.");
@@ -247,6 +247,7 @@ void init_wifi_tx(void) {
 
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
+    // TODO check if we're actually connected using 11AX / WPA3, if not, retry a few times.     
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TX_TAG, "connected to ap SSID:%s password:%s",
                  wifi_config.sta.ssid, wifi_config.sta.password);

@@ -1,5 +1,11 @@
 # Progress 
 
+2025-01-09
+
+ * Rx setup done, AP works
+ * strangely, Rx and Tx negotiate only 11AN at HT20. Needs further invesigation. 
+ * testing Rx strategies - should UDP packet reception time the thing, or the DMA on_sent event? 
+
 2025-01-07
 
 ![ESP32-C5 Devkits](devkits.jpg)

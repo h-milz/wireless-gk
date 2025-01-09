@@ -76,7 +76,7 @@ void monitor_task(void *pvParameters) {
     UBaseType_t hwm; 
     char *task_name; 
     bool *sender = (bool *) pvParameters;
-    TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, NULL };
+    TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, i2s_tx_task_handle, udp_rx_task_handle, NULL };
     while (1) {
         for (int i=0; i<sizeof(tasks)/sizeof(TaskHandle_t); i++) {
             hwm = uxTaskGetStackHighWaterMark(tasks[i]);
@@ -178,11 +178,17 @@ void app_main(void) {
         i2s_channel_init_tdm_mode(i2s_tx_handle, &i2s_tx_cfg);
 #endif               
 
+        // create UDP Rx task
+        // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
+        // Dann braucht man da auch nicht zu pollen. 
+        
+        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
+
         // TODO strip down stack sizes
         // create I2S Tx task
         // xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
-        // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
+        xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
         // create I2S tx on_sent callback
         i2s_event_callbacks_t cbs = {
@@ -195,12 +201,6 @@ void app_main(void) {
 
         i2s_channel_enable(i2s_tx_handle);
         
-        // create UDP Rx task
-        // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
-        // Dann braucht man da auch nicht zu pollen. 
-        
-        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
-
     }
     
     // we should never end up here. 

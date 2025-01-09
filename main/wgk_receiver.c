@@ -53,19 +53,19 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
 
+#ifdef RX_DEBUG
+    char t[][15] = {"", "ISR", "begin loop", "after notify", "unpacking", "end loop", "recvfrom" }; 
+#endif
+    
 
 void i2s_tx_task(void *args) {
-    int i;
+    int i, j;
     uint32_t size;
-    uint8_t *dma_buf;
+    uint8_t *dmabuf;
     uint32_t loops = 0, led = 0;
     uint32_t evt_p;
     dma_params_t *dma_params;
     uint32_t nsamples = NFRAMES; // default
-    
-#ifdef RX_DEBUG
-    char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
-#endif
     
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
@@ -80,12 +80,12 @@ void i2s_tx_task(void *args) {
         // convert back to pointer
         dma_params = (dma_params_t *)evt_p;    // könnte man sparen, wenn man eine union nehmen würde. 
         // and fetch pointer and size
-        dma_buf = dma_params->dma_buf;
+        dmabuf = dma_params->dma_buf;
         size = dma_params->size;
 #ifdef RX_DEBUG        
         _log[p].loc = 3;
         _log[p].time = get_time_us_in_isr();
-        _log[p].ptr = dma_buf;
+        _log[p].ptr = dmabuf;
         _log[p].size = size;
         p++;
 #endif
@@ -97,14 +97,21 @@ void i2s_tx_task(void *args) {
         // nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
         // ESP_LOGI(RX_TAG, "nsamples = %lu", nsamples);
         // could result in a race condition? if udpbuf is currently written to? 
-        for (i=nsamples-1; i>=0; --i) {   
-            memcpy(dma_buf+4*i, udpbuf+3*i, 3); 
+        memset (dmabuf, 0, size);
+        for (i=0; i<NFRAMES; i++) {
+            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
+                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
+                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
+                        udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                        SLOT_SIZE_UDP); 
+            }
         }
         stop_time = get_time_us_in_isr();
         
         
 #ifdef RX_DEBUG        
-        _log[p].loc = 5;
+        _log[p].loc = 4;
         _log[p].time = get_time_us_in_isr(); 
         p++;
 #endif    
@@ -113,7 +120,7 @@ void i2s_tx_task(void *args) {
         // ESP_LOGI(RX_TAG, "p = %d", p);
 #ifdef RX_DEBUG
         if (p >= NUM) {
-            i2s_channel_disable(i2s_rx_handle); // also stop all interrupts
+            i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
             int q; 
             uint32_t curr_time, prev_time=0;
             for (q=0; q<p; q++) {
@@ -216,6 +223,7 @@ void init_wifi_rx(void) {
 
 void udp_rx_task(void *pvParameters) {
 
+    int i, j;
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
     struct sockaddr_in dest_addr;
@@ -251,15 +259,10 @@ void udp_rx_task(void *pvParameters) {
 
         while(1) {
 
-#ifdef RX_DEBUG        
-            _log[p].loc = 2;
-            _log[p].time = get_time_us_in_isr(); 
-            p++;
-#endif
             int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
 #ifdef RX_DEBUG        
-            _log[p].loc = 3;
+            _log[p].loc = 6;
             _log[p].time = get_time_us_in_isr(); 
             _log[p].size = (uint32_t)len; 
             p++;
@@ -276,6 +279,9 @@ void udp_rx_task(void *pvParameters) {
             // we may need 2 bufs in order to avoid race conditions. 
             // ESP_LOGI (RX_TAG, "packet received, len %d", len);
             // unpack datagram
+            // this way, we depend on the UDP jitter ... 
+            // continue; 
+            // EOT
             memset (i2sbuf, 0, sizeof(i2sbuf));
             for (i=0; i<NFRAMES; i++) {
                 for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
@@ -299,7 +305,7 @@ void udp_rx_task(void *pvParameters) {
             _log[p].time = get_time_us_in_isr(); 
             p++;
             if (p >= NUM) {
-                i2s_channel_disable(i2s_rx_handle); // also stop all interrupts
+                i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
                 int q; 
                 uint32_t curr_time, prev_time=0;
                 for (q=0; q<p; q++) {
@@ -318,7 +324,7 @@ void udp_rx_task(void *pvParameters) {
                             break;
                     }                        
                 }
-                vTaskDelete(NULL); 
+                // vTaskDelete(NULL); 
             }
             
 #endif    

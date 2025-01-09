@@ -104,7 +104,7 @@
 #endif
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
-#define NUM 20
+#define NUM 50
 typedef struct { 
     uint8_t loc;        // location
     uint32_t time;      // timestamp in µs

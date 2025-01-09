@@ -64,7 +64,7 @@ void i2s_rx_task(void *args) {
     uint32_t loops = 0, led = 0;
     uint32_t evt_p;
     dma_params_t *dma_params;
-    uint32_t nsamples = NSAMPLES; // default
+    uint32_t nsamples = NFRAMES; // default
     
 #ifdef TX_DEBUG
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
@@ -150,7 +150,7 @@ void i2s_rx_task(void *args) {
         }
 #endif
         // blink LED
-        loops = (loops + 1) % (SAMPLE_RATE / NSAMPLES);
+        loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
             led = (led + 1) % 2;
             gpio_set_level(LED_PIN, led);
@@ -169,12 +169,20 @@ static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base, int32
         } else {
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
-        ESP_LOGI(TX_TAG,"connect to the AP fail");
+        ESP_LOGI(TX_TAG,"connect to the AP failed");
     } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+/*
+        wifi_ap_record_t ap_info;
+        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK && ! ap_info.phy_11ax) {
+            ESP_LOGW(TX_TAG, "Failed to connect using Wi-Fi 6 (802.11ax), retrying");
+            esp_wifi_disconnect();
+        } else {
+*/
         ESP_LOGI(TX_TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+//        }
     }
 }
 
@@ -192,7 +200,7 @@ void init_wifi_tx(void) {
 
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
-    if (ret == ESP_OK && wifi_config.sta.ssid[0] != '\0') {
+    if (ret == ESP_OK && wifi_config.sta.ssid[0] != '\0' && false) {
         // cfg is valid.
         ESP_LOGI(TX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
     } else {
@@ -204,6 +212,7 @@ void init_wifi_tx(void) {
         // wifi_config.sta.sae_pwe_h2e = ESP_WIFI_SAE_MODE,    // this is for WPA3
         // wifi_config.sta.sae_h2e_identifier = H2E_IDENTIFIER,
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // For STA mode
+        // ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11AX));             // we want 11AX only 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     }
 
@@ -240,24 +249,21 @@ void init_wifi_tx(void) {
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
     EventBits_t bits = xEventGroupWaitBits(s_wifi_event_group,
-            WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
-            pdFALSE,
-            pdFALSE,
-            portMAX_DELAY);
-
+        WIFI_CONNECTED_BIT | WIFI_FAIL_BIT,
+        pdFALSE,
+        pdFALSE,
+        portMAX_DELAY);
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
-    // TODO check if we're actually connected using 11AX / WPA3, if not, retry a few times.     
     if (bits & WIFI_CONNECTED_BIT) {
         ESP_LOGI(TX_TAG, "connected to ap SSID:%s password:%s",
                  wifi_config.sta.ssid, wifi_config.sta.password);
     } else if (bits & WIFI_FAIL_BIT) {
-        ESP_LOGI(TX_TAG, "Failed to connect to SSID:%s, password:%s",
+        ESP_LOGW(TX_TAG, "Failed to connect to SSID:%s, password:%s",
                  wifi_config.sta.ssid, wifi_config.sta.password);
     } else {
         ESP_LOGE(TX_TAG, "UNEXPECTED EVENT");
     }
-    
 }
 
 

@@ -59,7 +59,7 @@ void i2s_tx_task(void *args) {
     uint32_t loops = 0, led = 0;
     uint32_t evt_p;
     dma_params_t *dma_params;
-    uint32_t nsamples = NSAMPLES; // default
+    uint32_t nsamples = NFRAMES; // default
     
 #ifdef RX_DEBUG
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
@@ -134,7 +134,7 @@ void i2s_tx_task(void *args) {
         }
 #endif
         // blink LED
-        loops = (loops + 1) % (SAMPLE_RATE / NSAMPLES);
+        loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
             led = (led + 1) % 2;
             gpio_set_level(LED_PIN, led);
@@ -169,7 +169,7 @@ void init_wifi_rx(void) {
     
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
-    if (ret == ESP_OK && wifi_config.ap.ssid[0] != '\0') {
+    if (ret == ESP_OK && wifi_config.ap.ssid[0] != '\0' && false) {
         // cfg is valid.
         ESP_LOGI(RX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
     } else { 
@@ -184,10 +184,10 @@ void init_wifi_rx(void) {
         strncpy((char*)wifi_config.ap.ssid, SSID, sizeof(wifi_config.ap.ssid));
         strncpy((char*)wifi_config.ap.password, PASS, sizeof(wifi_config.ap.password));
         wifi_config.ap.ssid_len = strlen(SSID);
-        wifi_config.ap.channel = WIFI_CHANNEL;     // can we scan the net and find free channels? 
+        wifi_config.ap.channel = WIFI_CHANNEL;     // TODO can we scan the net and find free channels? 
         wifi_config.ap.max_connection = 2;  // TODO for debugging maybe, should be 1 in production
-        wifi_config.ap.authmode = WIFI_AUTH_WPA2_PSK;
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); // For STA mode
+        wifi_config.ap.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config) );    
     }         
     
@@ -199,6 +199,8 @@ void init_wifi_rx(void) {
 
     
     ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
+    // ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11AC | WIFI_PROTOCOL_11AX));             // we want 11AX only 
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?             
 
     ESP_LOGI(RX_TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
@@ -217,7 +219,7 @@ void udp_rx_task(void *pvParameters) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
     
-    dest_addr.sin_addr.s_addr = inet_addr(INADDR_ANY);
+    dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR); // htonl(INADDR_ANY);
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(PORT);
 
@@ -229,7 +231,7 @@ void udp_rx_task(void *pvParameters) {
         int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
         if (sock < 0) {
             ESP_LOGE(RX_TAG, "Unable to create socket: errno %d", errno);
-            break;
+            break;           // just try again. 
         }
 
         // Set timeout
@@ -243,14 +245,19 @@ void udp_rx_task(void *pvParameters) {
 
         while(1) {
 
-            int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
             // Error occurred during receiving
-            if (len < 0) {
+            if (len == -1) {
+                continue; 
+            } else if (len < 0) {
                 ESP_LOGE(RX_TAG, "recvfrom failed: errno %d", errno);
                 break;
             }
             // Data received
+            // we do nothing else here. the i2s_tx_task will be clocked by the on_sent events and pick up the udpbuf accordingly. 
+            // we may need 2 bufs in order to avoid race conditions. 
+            // ESP_LOGI (RX_TAG, "packet received, len %d", len);
             // TODO check if len == sizeof(udpbuf)
 
         }    

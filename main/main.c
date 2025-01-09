@@ -75,8 +75,8 @@ static int s_retry_num = 0;
 void monitor_task(void *pvParameters) {
     UBaseType_t hwm; 
     char *task_name; 
-    TaskHandle_t myself = xTaskGetCurrentTaskHandle();
-    TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, i2s_tx_task_handle, udp_rx_task_handle, myself };
+    bool *sender = (bool *) pvParameters;
+    TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, NULL };
     while (1) {
         for (int i=0; i<sizeof(tasks)/sizeof(TaskHandle_t); i++) {
             hwm = uxTaskGetStackHighWaterMark(tasks[i]);
@@ -125,6 +125,8 @@ void app_main(void) {
     
         // initialize Wifi STA
         init_wifi_tx();
+        // let it settle. 
+        vTaskDelay(200/portTICK_PERIOD_MS);
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_chan_cfg, NULL, &i2s_rx_handle);
@@ -136,12 +138,12 @@ void app_main(void) {
 #endif        
 
         // create I2S Rx task
-        xTaskCreate(i2s_rx_task, "i2s_rx_task", 3072, NULL, 4, &i2s_rx_task_handle);
+        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 4, &i2s_rx_task_handle);
     
         // create UDP Tx task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 2048, NULL, 5, &udp_tx_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
 
-        xTaskCreate(monitor_task, "monitor_task", 2048, NULL, 3, NULL);
+        xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {
@@ -164,6 +166,8 @@ void app_main(void) {
     
         // initialize Wifi AP
         init_wifi_rx();
+        // let it settle. 
+        vTaskDelay(100/portTICK_PERIOD_MS);
         
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_chan_cfg, &i2s_tx_handle, NULL);
@@ -176,15 +180,15 @@ void app_main(void) {
 
         // TODO strip down stack sizes
         // create I2S Tx task
-        xTaskCreate(i2s_rx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_rx_task_handle);
+        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
         // create UDP Rx task
         // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
         // Dann braucht man da auch nicht zu pollen. 
         
-        xTaskCreate(udp_tx_task, "udp_rx_task", 4096, NULL, 5, &udp_tx_task_handle);
+        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
 
-        xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
+        // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
         // create I2S tx on_sent callback
         i2s_event_callbacks_t cbs = {

@@ -91,12 +91,12 @@
 
 // WiFi stuff
 // this will later be replaced by random values created in SETUP and proliferated via WPS
-#define SSID "FRITZBox6660" // "WGK" 
-#define PASS "gr9P.q7HZ.Lod9" // "start123"
-#define WIFI_CHANNEL 8 
+#define SSID "WGK" 
+#define PASS "start123"
+#define WIFI_CHANNEL 100 
 
 // UDP stuff
-#define RX_IP_ADDR "192.168.20.3" // "192.168.4.1"  // 
+#define RX_IP_ADDR "192.168.4.1"  // 
 #define PORT 45678
 
 #ifndef MIN

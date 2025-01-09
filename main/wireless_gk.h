@@ -46,7 +46,7 @@
 #include "lwip/errno.h"
 
 // #define TX_DEBUG
-// #define RX_DEBUG
+#define RX_DEBUG
 
 // TODO remove for production
 #pragma GCC diagnostic ignored "-Wunused-variable"

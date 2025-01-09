@@ -180,14 +180,8 @@ void app_main(void) {
 
         // TODO strip down stack sizes
         // create I2S Tx task
-        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
+        // xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
-        // create UDP Rx task
-        // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
-        // Dann braucht man da auch nicht zu pollen. 
-        
-        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
-
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
         // create I2S tx on_sent callback
@@ -197,10 +191,16 @@ void app_main(void) {
             .on_sent = i2s_tx_callback,
             .on_send_q_ovf = NULL,
         };
-        i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
+        // i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
         
+        // create UDP Rx task
+        // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
+        // Dann braucht man da auch nicht zu pollen. 
+        
+        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
+
     }
     
     // we should never end up here. 

@@ -27,8 +27,7 @@ EventGroupHandle_t s_wifi_event_group;
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-// static uint8_t i2sbuf[4 * NUM_SLOTS * NSAMPLES];   // no longer needed, we work directly with the DMA bufs. 
-uint8_t udpbuf[3 * NUM_SLOTS * NSAMPLES];
+uint8_t udpbuf[3 * NUM_SLOTS_UDP * NFRAMES];
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 

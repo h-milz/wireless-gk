@@ -2,11 +2,24 @@
 
 2025-01-10
 
- * the two boards now talk exclusively 11AX with WPA3-SAE in 5 GHz. According to iperf, the UDP data rate with a payload of 1440 bytes is around 63 MBit/s. YAY! 
+The two boards now talk exclusively 11AX with WPA3-SAE in 5 GHz. According to iperf, the UDP data rate with a payload of 1440 bytes is around 63 MBit/s. YAY! 
 
-`    I (4195) wifi:security: WPA3-SAE, phy:11ax, rssi:-29, cipher(pairwise:0x3, group:0x3), pmf:1, 
-`
- * OK, I think it's time for another latency measurement because that's now on a different platform. 
+    I (4195) wifi:security: WPA3-SAE, phy:11ax, rssi:-29, cipher(pairwise:0x3, group:0x3), pmf:1, 
+
+OK, I think it's time for another latency measurement because that's now on a different platform. I send 1440 byte packets every second and pull an interrupt line on the sender, and I mesure the time from the interrupt until the packet actually arrives. This is the pure UDP latency. 
+
+    I (29424) wgk_rx: latency: 823 µs
+    I (30424) wgk_rx: latency: 805 µs
+    I (31424) wgk_rx: latency: 800 µs
+    I (32424) wgk_rx: latency: 813 µs
+    I (33424) wgk_rx: latency: 801 µs
+    I (34424) wgk_rx: latency: 797 µs
+    I (35424) wgk_rx: latency: 793 µs
+    I (36424) wgk_rx: latency: 791 µs
+    I (37424) wgk_rx: latency: 739 µs
+    I (38424) wgk_rx: latency: 800 µs
+
+Add this to the 1.36 ms for 60 frame ADC plus 22.7 µs until the first sample arrives at the DAC, plus a couple of microseconds for the data processing, and there you go: 2.16 ms, say, 2,2 ms. Beat this! (OK, that's over a distance of about 20 cm, but light speed is light speed, even on a stage.) 
  
 2025-01-09
 

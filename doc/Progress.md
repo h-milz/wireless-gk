@@ -1,5 +1,13 @@
 # Progress 
 
+2025-01-10
+
+ * the two boards now talk exclusively 11AX with WPA3-SAE in 5 GHz. According to iperf, the UDP data rate with a payload of 1440 bytes is around 63 MBit/s. YAY! 
+
+`    I (4195) wifi:security: WPA3-SAE, phy:11ax, rssi:-29, cipher(pairwise:0x3, group:0x3), pmf:1, 
+`
+ * OK, I think it's time for another latency measurement because that's now on a different platform. 
+ 
 2025-01-09
 
  * Rx setup done, AP works

@@ -205,14 +205,11 @@ void init_wifi_tx(void) {
         ESP_LOGI(TX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
     } else {
         ESP_LOGW(TX_TAG, "No saved Wi-Fi credentials found. Using default.");
-        memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
+        memset(&wifi_config, 0, sizeof(wifi_config));                                           // Clear structure
         strncpy((char*)wifi_config.sta.ssid, SSID, sizeof(wifi_config.sta.ssid));
         strncpy((char*)wifi_config.sta.password, PASS, sizeof(wifi_config.sta.password));
-        wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
-        // wifi_config.sta.sae_pwe_h2e = ESP_WIFI_SAE_MODE,    // this is for WPA3
-        // wifi_config.sta.sae_h2e_identifier = H2E_IDENTIFIER,
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // For STA mode
-        // ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11AX));             // we want 11AX only 
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;                                // not more, not less. 
+        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
     }
 
@@ -229,16 +226,6 @@ void init_wifi_tx(void) {
                                                         NULL,
                                                         &instance_got_ip));
 
-    // esp_netif_t netif = esp_netif_get_default_netif();
-    // esp_netif_set_hostname(netif, "wgk_sender");
-
-
-/*
-    err = esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11AX);
-    if (err != ESP_OK) {
-        ESP_LOGW(TX_TAG, "esp_wifi_set_protocol returned err %d", err); 
-    }
-*/
     ESP_ERROR_CHECK(esp_wifi_start() );
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
     

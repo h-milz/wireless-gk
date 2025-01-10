@@ -195,7 +195,7 @@ void init_wifi_rx(void) {
         wifi_config.ap.ssid_len = strlen(SSID);
         wifi_config.ap.channel = WIFI_CHANNEL;     // TODO can we scan the net and find free channels? 
         wifi_config.ap.max_connection = 2;  // TODO for debugging maybe, should be 1 in production
-        wifi_config.ap.authmode = WIFI_AUTH_WPA2_WPA3_PSK;
+        wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config) );    
     }         
@@ -206,10 +206,13 @@ void init_wifi_rx(void) {
                                                         NULL,
                                                         NULL));
 
-    
+    wifi_protocols_t proto_config = {0, };
+    proto_config.ghz_2g = 0;
+    proto_config.ghz_5g = WIFI_PROTOCOL_11AX;                    // we want 5 GHz 11AX WPA3. 
+
     ESP_ERROR_CHECK(esp_wifi_start() );
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
-    // ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11AC | WIFI_PROTOCOL_11AX));             // we want 11AX only 
+    ESP_ERROR_CHECK(esp_wifi_set_protocols(WIFI_IF_AP, &proto_config));            
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?             
 
     ESP_LOGI(RX_TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",

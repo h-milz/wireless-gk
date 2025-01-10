@@ -143,7 +143,7 @@ void app_main(void) {
         // create UDP Tx task
         xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
 
-        xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
+        // xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {
@@ -152,7 +152,7 @@ void app_main(void) {
             .on_sent = NULL,
             .on_send_q_ovf = NULL,
         };
-        i2s_channel_register_event_callback(i2s_rx_handle, &cbs, NULL);
+        // i2s_channel_register_event_callback(i2s_rx_handle, &cbs, NULL);
 
         // enable channel
         i2s_channel_enable(i2s_rx_handle);
@@ -188,7 +188,7 @@ void app_main(void) {
         // create I2S Tx task
         // xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
-        xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
+        // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
         // create I2S tx on_sent callback
         i2s_event_callbacks_t cbs = {

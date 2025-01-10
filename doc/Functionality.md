@@ -16,8 +16,8 @@ At first-order approximation, the basic functionality will look like this:
 ## Receiver
 
   * the receiver will work as a WiFi access point.
-  * UDP packets will be read into a ring buffer as they arrive. 
-  * the I2S DMA driver will generate an interrupt for each 60 frame buffer that was just sent. 
-  * upon each interrupt, the last received UDP buffer unpacked and sent to the DAC. 
+  * UDP packets will be read into a ring buffer as they arrive, i.e. asynchronously.
+  * the I2S DMA driver will generate an interrupt for each buffer (60 frames) that was just received, i.e. this will be a synchronous transfer. 
+  * upon each interrupt, the last received UDP buffer will be unpacked and sent to the DAC via DMA. 
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 

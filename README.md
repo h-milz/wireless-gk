@@ -24,13 +24,13 @@ Please check the [Components](doc/Components.md) file for more information.
 
 ## A Word About Using WiFi
 
-In order to keep latency low and resilience againt network congestion high, the combo uses a private peer-to-peer WiFi6 802.11AX network with WPA3 authentication on the 5 GHz band. 
+In order to keep latency low and resilience against network congestion high, the combo uses a private peer-to-peer WiFi6 802.11AX network with WPA3 authentication on the 5 GHz band. 
 
 The net WiFi data rate is 8 channels x 24 bytes per channel x 44100 samples per second = 8.4672 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS7_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t) -- in fact, I measured a maximum UDP throughput between 2 ESP32-C5 boards of around 63 MBit/s using iperf. 
 
 To keep latency caused by the UDP protocol overhead low, I collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay. The maximum UDP payload of 1472 bytes allows for collecting 60 samples per batch, which sums up to 1440 bytes. ADC conversion of 60 samples takes 1.36 ms. 
 
-The measured UDP latency for 1140 byte packets between the two boards proved to be in the 800 µs range. This means the overall latency will of the order of magnitude of 2.2 ms. 
+The measured UDP latency for 1440 byte packets between the two boards proved to be in the 800 µs range. This means the overall latency will be of the order of magnitude of 2.2 ms. 
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
 

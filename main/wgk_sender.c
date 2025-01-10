@@ -37,9 +37,6 @@ static int s_retry_num = 0;
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
-    // raise signal pin for latency measurement
-    gpio_set_level(SIG_PIN, 1);    
-
     // we pass the *dma_buf and size in a struct, by reference. 
     static dma_params_t dma_params;
     dma_params.dma_buf = event->dma_buf;
@@ -120,9 +117,6 @@ void i2s_rx_task(void *args) {
         
         // send. 
         xTaskNotifyIndexed(udp_tx_task_handle, 0, size, eSetValueWithOverwrite);
-            
-        // release signal pin
-        gpio_set_level(SIG_PIN, 0);    
 
         // ESP_LOGI(RX_TAG, "p = %d", p);
 #ifdef TX_DEBUG
@@ -335,6 +329,51 @@ void udp_tx_task(void *pvParameters) {
     // should never be reached
     vTaskDelete(NULL);
 }
+
+#ifdef LATENCY_MEAS            
+void latency_meas_task(void *pvParameters) {
+    struct sockaddr_in dest_addr;
+    struct timeval timeout;
+    int err; 
+
+    dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(PORT);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(TX_TAG, "Unable to create socket: errno %d", errno);
+    }
+
+    // Set timeout
+    setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    
+    // TODO UDP send buffer size - default 5760, can we make much bigger! 
+    // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+
+    ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
+
+    memset (udpbuf, 0xaa, sizeof(udpbuf));         // clean up first
+
+    while (1) {
+        gpio_set_level(SIG_PIN, 1);    
+
+        err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        
+        ESP_LOGI (TX_TAG, "latency packet sent");
+
+        // release signal pin
+        gpio_set_level(SIG_PIN, 0);    
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+}
+#endif
+
+
+
 
 bool init_gpio_tx (void) {
     bool setup_needed = false; 

@@ -46,10 +46,13 @@
 #include "lwip/errno.h"
 
 // #define TX_DEBUG
-#define RX_DEBUG
+// #define RX_DEBUG
+// #define LATENCY_MEAS                 // activate this if you want to do a UDP latency measurement. 
+                                        // Connect Tx SIG_PIN to Rx ISR_PIN and GND to GND. 
 
-// TODO remove for production
+// TODO remove for production compilation 
 #pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 // during development, we use STD with PCM1808 ADC and PCM5102 DAC
 #define I2S_STD
@@ -216,6 +219,7 @@ bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *us
 void i2s_rx_task(void *args);
 bool init_gpio_tx(void);
 void tx_setup (void);
+void latency_meas_task(void *pvParameters); 
 
 // Receiver stuff
 extern i2s_chan_handle_t i2s_tx_handle;

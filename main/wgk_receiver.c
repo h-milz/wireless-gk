@@ -27,7 +27,8 @@
 
 static const char *RX_TAG = "wgk_rx";
 
-DRAM_ATTR volatile uint32_t start_time = 0, stop_time = 0, diff_time = 0;
+DRAM_ATTR volatile uint32_t start_time = 0;
+static uint32_t stop_time = 0, diff_time = 0;
 
 i2s_chan_handle_t i2s_tx_handle = NULL;
 TaskHandle_t i2s_tx_task_handle = NULL; 
@@ -193,8 +194,9 @@ void init_wifi_rx(void) {
         strncpy((char*)wifi_config.ap.ssid, SSID, sizeof(wifi_config.ap.ssid));
         strncpy((char*)wifi_config.ap.password, PASS, sizeof(wifi_config.ap.password));
         wifi_config.ap.ssid_len = strlen(SSID);
-        wifi_config.ap.channel = WIFI_CHANNEL;     // TODO can we scan the net and find free channels? 
-        wifi_config.ap.max_connection = 2;  // TODO for debugging maybe, should be 1 in production
+        wifi_config.ap.channel = WIFI_CHANNEL;      // TODO can we scan the net and find free channels? 
+        wifi_config.ap.max_connection = 2;          // TODO for debugging maybe, should be 1 in production
+        // wifi_config.ap.ssid_hidden = 1;             // security by obscurity ;-) 
         wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
         ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); 
         ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config) );    
@@ -263,6 +265,10 @@ void udp_rx_task(void *pvParameters) {
         while(1) {
 
             int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+#ifdef LATENCY_MEAS
+            stop_time = get_time_us_in_isr();
+            ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
+#endif
 
 #ifdef RX_DEBUG        
             _log[p].loc = 6;
@@ -337,10 +343,12 @@ void udp_rx_task(void *pvParameters) {
 }
 
 
+#ifdef LATENCY_MEAS
 // latency measurement
 static void IRAM_ATTR handle_interrupt(void *args) {
     start_time = get_time_us_in_isr();
 }
+#endif
 
 
 bool init_gpio_rx (void) {
@@ -367,6 +375,7 @@ bool init_gpio_rx (void) {
     gpio_set_intr_type(LED_PIN, GPIO_INTR_DISABLE);
     gpio_set_level(LED_PIN, 0);
 
+#ifdef LATENCY_MEAS
     // enable the interrupt on ISR_PIN
     gpio_reset_pin(ISR_PIN); 
     gpio_set_direction(ISR_PIN, GPIO_MODE_INPUT);
@@ -377,7 +386,7 @@ bool init_gpio_rx (void) {
     gpio_install_isr_service(0);
     gpio_isr_handler_add(ISR_PIN, handle_interrupt, NULL);
     gpio_intr_enable(ISR_PIN);
-
+#endif
 
     // Returns true if setup was pressed
     return (setup_needed); 

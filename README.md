@@ -8,9 +8,9 @@ My first thoughts about a Wireless GK interface date back to the early 2000's. W
 
 I did not pursue the idea for a number of years but in April 2024, I stumbled across a [Youtube video](https://www.youtube.com/watch?v=Ek9ydo4c_C4) by a Czech guy named "rockykoplik" demoing a device he had prototyped. Sadly, this project seems to fly under the radar for some reason. The web shop is closed. In any case, an earlier post in the [VGuitarForums](https://www.vguitarforums.com/smf/index.php?msg=257890) states that the system causes a latency of 16 ms. Another [post](https://www.vguitarforums.com/smf/index.php?msg=251550) says 13-17 ms. We'll talk about latency later. 
 
-This triggered my wish to restart my former idea with more recent components, like 
+This triggered my wish to restart my former idea with more recent components using WiFi, like 
 
-  * ESP32-C5 MCUs (as soon as available - development can also take place with the C6)
+  * ESP32-C5 MCUs (of which I have two sample DevKits from Espressif)
 
   * 8-channel ADCs and DACs by AKM
 
@@ -24,19 +24,13 @@ Please check the [Components](doc/Components.md) file for more information.
 
 ## A Word About Using WiFi
 
-In order to reduce latency, the combo will be using a private peer-to-peer WiFi with one of these configs: 
+In order to keep latency low and resilience againt network congestion high, the combo uses a private peer-to-peer WiFi6 802.11AX network with WPA3 authentication on the 5 GHz band. 
 
- * with the receiver as the AP running a websocket server and the sender as the client, 
- * same, but running UDP instead of websockets
- * running ESP-NOW which was designed for high throughput and low latency. 
+The net WiFi data rate is 8 channels x 24 bytes per channel x 44100 samples per second = 8.4672 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS7_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t) -- in fact, I measured a maximum UDP throughput between 2 ESP32-C5 boards of around 63 MBit/s using iperf. 
 
-The net WiFi data rate is 8 channels x 32 bytes per channel x 44100 samples per second (I2S TDM data format) = 11.2896 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS9_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t)-- the [ESP-IDF says](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c6/api-guides/wifi.html#how-to-configure-parameters) ~40 Mbit/s for UDP. Spare cpu cycles permitting, one could pack the data format to effectively have 24 bit slots instead of 32, reducing the net data rate by 25 percent. (measurements on the C6 showed that this takes about 0.3µs per sample.)
+To keep latency caused by the UDP protocol overhead low, I collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay. The maximum UDP payload of 1472 bytes allows for collecting 60 samples per batch, which sums up to 1440 bytes. ADC conversion of 60 samples takes 1.36 ms. 
 
-ESP-NOW turned out to not be usable - firstly it supports only a default net datarate of 1 Mbps, and secondly there is no authentication at all. The protocol does provide encryption but the receiver will happily accept all packets sent to him. The only thing you can do is embed a HMAC authentication in your own protocol, but this will still open the door for denial-of-service. Which, in a stage scenario, is not something you want to deal with. (This is a major architectural failure if you ask me.)   Thirdly, the maximum payload per frame is 250 bytes, which doesn't help to reduce the interrupt rate. 
-  
-Websockets have a higher protocol overhead compared to UDP, so it's UDP, and that's what most if not all audio streaming protocols use. 
-
-To keep latency caused by the protocol overhead low, one can collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay which, for 10 sample batches, is about 0.2 ms. Presumably, when doing this, the latency caused by this delay will go up, but the latency caused by protocol overhead will go down _per frame_. The sweet spot seems to be at packing 48 samples before sending, which keeps the interrupt rate low enough to not lose any packets in my tests, and the **measured latency using a ESP32-C6 pair** was 1.088 ms (sic!) sending 918 packets/s or 1.360 ms for 60 samples at 735 packets/s. It will be interesting to see how the C5 performs given that is has a 50 percent higher clock rate, but the base latency will be (60 samples) / (44100 samples / s) = 1.36 ms.
+The measured UDP latency for 1140 byte packets between the two boards proved to be in the 800 µs range. This means the overall latency will of the order of magnitude of 2.2 ms. 
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
 
@@ -75,9 +69,9 @@ Also, in the VGuitarForum, not even 350 people could be found to crowdfund a sol
 
 In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
 
-I'm not going to make any attempt to commercialize something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of dedicated people could not build and ship small batches of devices at cost price, plus support contracts for pro users, as long as the prerequisites of the [LICENSE](LICENSE) are observed. If you want to participate, please be familiar with the ESP-IDF and Github. 
+I'm not going to make any attempt to commercialize something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of dedicated people could not build and ship small batches of devices at cost price, plus support contracts for pro users, as long as the prerequisites of the [LICENSE](COPYING) are observed. If you want to participate, please be familiar with the ESP-IDF, git, and Github. 
 
-There is one more issue to **commercial distribution**. Although the individual ESP32 modules and dev boards are FCC and CE certified, marketing a compound device using such a module requires **certification** of the whole device, which can be time-consuming and extremely costly (which presumably killed the previously mentioned solution). Should I ever ship pre-built (and fully tested!) devices, then they will be preassembled kits without ESP module and LiIon battery, but with comprehensive instructions how to complete the device. The final steps involve purchasing the appropriate ESP modules and a battery, flash the modules using your computer and a USB cable, plug them in the printed circuit boards, plug the battery in the sender, and you should be ready to go. If anyone has a simpler idea, feel free to comment! 
+There is one more issue to **commercial distribution**. Although the individual ESP32 modules and dev boards are FCC and CE certified, marketing a compound device using such a module requires **certification** of the whole device, which can be time-consuming and extremely costly (which presumably killed the previously mentioned solution). Should I ever ship pre-built (and fully tested!) devices, then they will be preassembled kits without ESP module and LiIon battery, but with comprehensive instructions how to complete the device. The final steps involve purchasing the appropriate ESP modules and a battery, flash the modules using your computer and a USB cable, plug them in the printed circuit boards, plug the battery in the sender, and you should be ready to go. If anyone has a simpler idea, feel free to comment! Ah yes, and 3D printed cases would be nifty. 
 
 ## Sequence of Events
 

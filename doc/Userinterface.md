@@ -12,19 +12,19 @@ The receiver can be very similar, although some people may prefer a 9.5" 1U case
 
 After assembling, you will have to set up the WiFi pairing once on both devices: 
 
- * press and hold SETUP button on the Receiver (which will provide a WiFi access point with a hidden SSID from then on) and switch on. Wait until the LED blinks in a certain pattern, which should take a few seconds.
- * the Receiver will go to setup mode, generate and store a WiFi random SSID and password, and enter WPS registrar mode. For security reasons, the timeout will be set to 60 seconds. 
- * press and hold SETUP on the Sender (which will be a WiFi station from then on) and switch on. Wait until the LED blinks in a certain pattern, which should take a few seconds.
+ * press and hold WPS button on the Receiver (which will provide a WiFi access point from then on) and switch on. Wait until the LED blinks in a certain pattern, which should take a few seconds.
+ * the Receiver will go to setup mode, generate and store a WiFi random SSID and password, and enter WPS registrar mode. For security reasons, the timeout will be set to 2 minutes.
+ * press and hold WPS on the Sender (which will be a WiFi station from then on) and switch on. Wait until the LED blinks in a certain pattern, which should take a few seconds.
  * the Sender will go to WPS enrollee mode, retrieve the SSID and password from the Receiver, and store the credentials. 
- * when successful, both devices will reboot into normal mode and will be ready for use. 
- * Should you ever need to reconfigure / re-pair the device(s), simply repeat.
+ * when successful, both devices will switch to normal mode and will be ready for use. 
+ * Should you ever need to re-pair the device(s), simply repeat.
 
 Although WPS sounds outdated, more modern methods like WiFi Easy Connect require either generating and reading a QR code or entering passwords by hand. WPS requires only a button. 
 
 ## Software Installation and Updates
 
 For a while, I thought about providing an over-the-air (OTA) update function. On the other hand, if you are able to handle a guitar synthesizer and your guitar rig, odds are that you are able to handle a simple update using a computer and USB cable. 
-The USB-C socket will connect to the ESP32 UART chip so that everyone will be able to (re-) flash their devices or if you want to experiment and contribute. And the pros will have their guitar technicians. I mean, it's not rocket science. Should OTA ever come, it may look as follows. In any case, make sure you flash both devices of a pair with the exact same image file. Changes may be destructive, and devices with different image versions may not cooperate.
+The USB-C socket will connect to the ESP32 UART chip so that everyone will be able to (re-) flash their devices or if you want to experiment and contribute. And the pros will have their guitar technicians. I mean, it's not rocket science. Should OTA ever come, it may look as follows below. In any case, make sure you flash both devices of a pair with the exact same image file. Changes may be destructive, and devices with different image versions may not cooperate. (In fact, I will prevent mixed setups from working, by using the app version number of the respective build.) 
 
 ## Over-the-air Updates (OTA) (TBD) 
 

@@ -124,6 +124,7 @@ void app_main(void) {
         if (setup_needed) {   // setup needed
             nvs_flash_erase();
             nvs_flash_init();
+            ESP_LOGI(TAG, "setup requested, entering setup mode");
         }
     
         // TODO check if we had WiFi credentials in NVS, if not, setup. 
@@ -174,6 +175,7 @@ void app_main(void) {
         if (setup_needed) {   // setup needed
             nvs_flash_erase();
             nvs_flash_init();
+            ESP_LOGI(TAG, "setup requested, entering setup mode");
         }
 
         // TODO check if we had WiFi credentials in NVS, if not, setup. 

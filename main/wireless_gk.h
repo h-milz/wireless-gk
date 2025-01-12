@@ -36,6 +36,7 @@
 #include "esp_system.h"
 #include "esp_timer.h"
 #include "esp_wifi.h"
+#include "esp_wps.h"
 #include "nvs_flash.h"
 #include "driver/gpio.h"
 #include "rom/ets_sys.h"

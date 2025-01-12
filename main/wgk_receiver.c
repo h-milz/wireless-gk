@@ -167,7 +167,7 @@ static void wifi_ap_event_handler(void* arg, esp_event_base_t event_base,
 
 #define MAXLEN 32
 
-void init_wifi_rx(void) {
+void init_wifi_rx(bool setup_needed) {
     // we are WiFi AP 
 
     ESP_ERROR_CHECK(esp_netif_init());
@@ -226,7 +226,7 @@ void init_wifi_rx(void) {
 // udp_rx_task receives packets as they arrive, and puts them in udpbuf. 
 // TODO do we need multiple udpbufs as a ring buffer? to avoid race conditions
 
-void udp_rx_task(void *pvParameters) {
+void udp_rx_task(void *args) {
 
     int i, j;
     struct sockaddr_storage source_addr;

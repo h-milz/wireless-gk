@@ -94,6 +94,7 @@ void app_main(void) {
 
     bool sender = false; 
     bool creds_available = false;
+    bool setup_needed = false;
     
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -119,12 +120,17 @@ void app_main(void) {
     if (sender) {
         // initialize GPIO pins
         // returns true if setup was pressed
-        init_gpio_tx();
+        setup_needed = init_gpio_tx();
+        if (setup_needed) {   // setup needed
+            nvs_flash_erase();
+            nvs_flash_init();
+        }
     
         // TODO check if we had WiFi credentials in NVS, if not, setup. 
     
         // initialize Wifi STA
-        init_wifi_tx();
+        init_wifi_tx(setup_needed);
+        
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
@@ -164,12 +170,16 @@ void app_main(void) {
     } else {   // receiver
         // initialize GPIO pins
         // returns true if setup was pressed
-        init_gpio_rx();
+        setup_needed = init_gpio_rx();
+        if (setup_needed) {   // setup needed
+            nvs_flash_erase();
+            nvs_flash_init();
+        }
 
         // TODO check if we had WiFi credentials in NVS, if not, setup. 
     
         // initialize Wifi AP
-        init_wifi_rx();
+        init_wifi_rx(setup_needed);
         // let it settle. 
         vTaskDelay(100/portTICK_PERIOD_MS);
         

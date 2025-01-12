@@ -182,7 +182,7 @@ static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base, int32
 
 
 // Sender is WIFI_STA
-void init_wifi_tx(void) {
+void init_wifi_tx(bool setup_needed) {
     esp_err_t err; 
     
     ESP_ERROR_CHECK(esp_netif_init());
@@ -260,7 +260,7 @@ static heap_trace_record_t trace_record[NUM_RECORDS];
 */ 
 
 // mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
-void udp_tx_task(void *pvParameters) {
+void udp_tx_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
     int buf_size = 40960;  // UDP buffer size - adjust!
@@ -331,7 +331,7 @@ void udp_tx_task(void *pvParameters) {
 }
 
 #ifdef LATENCY_MEAS            
-void latency_meas_task(void *pvParameters) {
+void latency_meas_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
     int err; 

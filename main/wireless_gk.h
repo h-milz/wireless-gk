@@ -213,20 +213,20 @@ static i2s_tdm_config_t i2s_tx_cfg = {
 extern i2s_chan_handle_t i2s_rx_handle;
 extern TaskHandle_t i2s_rx_task_handle; 
 extern TaskHandle_t udp_tx_task_handle; 
-void init_wifi_tx(void);
-void udp_tx_task(void *pvParameters);
+void init_wifi_tx(bool setup_needed);
+void udp_tx_task(void *args);
 bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx); 
 void i2s_rx_task(void *args);
 bool init_gpio_tx(void);
 void tx_setup (void);
-void latency_meas_task(void *pvParameters); 
+void latency_meas_task(void *args); 
 
 // Receiver stuff
 extern i2s_chan_handle_t i2s_tx_handle;
 extern TaskHandle_t i2s_tx_task_handle; 
 extern TaskHandle_t udp_rx_task_handle; 
-void init_wifi_rx(void);
-void udp_rx_task(void *pvParameters);
+void init_wifi_rx(bool setup_needed);
+void udp_rx_task(void *args);
 bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx); 
 void i2s_tx_task(void *args);
 bool init_gpio_rx(void);

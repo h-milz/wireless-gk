@@ -21,6 +21,10 @@ At first-order approximation, the basic functionality will look like this:
   * upon each interrupt, the last received UDP buffer will be unpacked and sent to the DAC via DMA. 
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 
+## Wifi Channel Selection
+
+In order to avoid congested channels, the Receiver performs a channel scan when initializing the Wifi AP and chooses the lowest numbered channel with the lowest AP count. Scan starts at channel 36 and goes up to 177. 
+
 ## WiFi Pairing
 
 When pressing and holding the WPS button, Sender and Receiver go to WPS mode. The Receiver is the WPS registrar, the Sender is the WPS enrollee. Our WPS process only supports PBC (Push Button Configuration), and WiFi encryption is tied to WPA3-SAE. 

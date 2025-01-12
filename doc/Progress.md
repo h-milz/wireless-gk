@@ -4,6 +4,7 @@
 
  * WPS works fine with WPA3 (esp-idf examples)
  * WPS pairing and normal operation work. 
+ * automatic free channel search works. 
 
 2025-01-10
 

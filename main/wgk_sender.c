@@ -31,15 +31,15 @@ i2s_chan_handle_t i2s_rx_handle = NULL;
 TaskHandle_t i2s_rx_task_handle = NULL; 
 TaskHandle_t udp_tx_task_handle = NULL; 
 
+static esp_wps_config_t config = WPS_CONFIG_INIT_DEFAULT(WPS_MODE);
+static wifi_config_t wps_ap_creds[MAX_WPS_AP_CRED];
+static int s_ap_creds_num = 0;
 static int s_retry_num = 0;
 
 
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
-    // raise signal pin for latency measurement
-    gpio_set_level(SIG_PIN, 1);    
-
     // we pass the *dma_buf and size in a struct, by reference. 
     static dma_params_t dma_params;
     dma_params.dma_buf = event->dma_buf;
@@ -120,9 +120,6 @@ void i2s_rx_task(void *args) {
         
         // send. 
         xTaskNotifyIndexed(udp_tx_task_handle, 0, size, eSetValueWithOverwrite);
-            
-        // release signal pin
-        gpio_set_level(SIG_PIN, 0);    
 
         // ESP_LOGI(RX_TAG, "p = %d", p);
 #ifdef TX_DEBUG
@@ -158,37 +155,92 @@ void i2s_rx_task(void *args) {
     }    
 }
 
-static void wifi_sta_event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data) {
-    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
-        esp_wifi_connect();
-    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
-        if (s_retry_num < MAX_RETRY) {
-            esp_wifi_connect();
-            s_retry_num++;
-            ESP_LOGI(TX_TAG, "retry to connect to the AP");
-        } else {
-            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
-        }
-        ESP_LOGI(TX_TAG,"connect to the AP failed");
-    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
-        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
-/*
-        wifi_ap_record_t ap_info;
-        if (esp_wifi_sta_get_ap_info(&ap_info) == ESP_OK && ! ap_info.phy_11ax) {
-            ESP_LOGW(TX_TAG, "Failed to connect using Wi-Fi 6 (802.11ax), retrying");
-            esp_wifi_disconnect();
-        } else {
-*/
-        ESP_LOGI(TX_TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
-        s_retry_num = 0;
-        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
-//        }
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data)
+{
+    static int ap_idx = 1;
+
+    switch (event_id) {
+        case WIFI_EVENT_STA_START:
+            ESP_LOGI(TAG, "WIFI_EVENT_STA_START");
+            break;
+        case WIFI_EVENT_STA_DISCONNECTED:
+            ESP_LOGI(TAG, "WIFI_EVENT_STA_DISCONNECTED");
+            if (s_retry_num < MAX_RETRY_ATTEMPTS) {
+                esp_wifi_connect();
+                s_retry_num++;
+            } else if (ap_idx < s_ap_creds_num) {
+                /* Try the next AP credential if first one fails */
+
+                if (ap_idx < s_ap_creds_num) {
+                    ESP_LOGI(TAG, "Connecting to SSID: %s, Passphrase: %s",
+                             wps_ap_creds[ap_idx].sta.ssid, wps_ap_creds[ap_idx].sta.password);
+                    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wps_ap_creds[ap_idx++]) );
+                    esp_wifi_connect();
+                }
+                s_retry_num = 0;
+            } else {
+                ESP_LOGI(TAG, "Failed to connect!");
+            }
+
+            break;
+        case WIFI_EVENT_STA_WPS_ER_SUCCESS:
+            ESP_LOGI(TAG, "WIFI_EVENT_STA_WPS_ER_SUCCESS");
+            {
+                wifi_event_sta_wps_er_success_t *evt =
+                    (wifi_event_sta_wps_er_success_t *)event_data;
+                int i;
+
+                if (evt) {
+                    s_ap_creds_num = evt->ap_cred_cnt;
+                    for (i = 0; i < s_ap_creds_num; i++) {
+                        memcpy(wps_ap_creds[i].sta.ssid, evt->ap_cred[i].ssid,
+                               sizeof(evt->ap_cred[i].ssid));
+                        memcpy(wps_ap_creds[i].sta.password, evt->ap_cred[i].passphrase,
+                               sizeof(evt->ap_cred[i].passphrase));
+                    }
+                    /* If multiple AP credentials are received from WPS, connect with first one */
+                    ESP_LOGI(TAG, "Connecting to SSID: %s, Passphrase: %s",
+                             wps_ap_creds[0].sta.ssid, wps_ap_creds[0].sta.password);
+                    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wps_ap_creds[0]) );
+                }
+                /*
+                 * If only one AP credential is received from WPS, there will be no event data and
+                 * esp_wifi_set_config() is already called by WPS modules for backward compatibility
+                 * with legacy apps. So directly attempt connection here.
+                 */
+                ESP_ERROR_CHECK(esp_wifi_wps_disable());
+                esp_wifi_connect();
+            }
+            break;
+        case WIFI_EVENT_STA_WPS_ER_FAILED:
+            ESP_LOGI(TAG, "WIFI_EVENT_STA_WPS_ER_FAILED");
+            ESP_ERROR_CHECK(esp_wifi_wps_disable());
+            ESP_ERROR_CHECK(esp_wifi_wps_enable(&config));
+            ESP_ERROR_CHECK(esp_wifi_wps_start(0));
+            break;
+        case WIFI_EVENT_STA_WPS_ER_TIMEOUT:
+            ESP_LOGI(TAG, "WIFI_EVENT_STA_WPS_ER_TIMEOUT");
+            ESP_ERROR_CHECK(esp_wifi_wps_disable());
+            ESP_ERROR_CHECK(esp_wifi_wps_enable(&config));
+            ESP_ERROR_CHECK(esp_wifi_wps_start(0));
+            break;
+        default:
+            break;
     }
 }
 
 
+static void got_ip_event_handler(void* arg, esp_event_base_t event_base,
+                             int32_t event_id, void* event_data)
+{
+    ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+    ESP_LOGI(TAG, "got ip: " IPSTR, IP2STR(&event->ip_info.ip));
+}
+
+
 // Sender is WIFI_STA
-void init_wifi_tx(void) {
+void init_wifi_tx(bool setup_requested) {
     esp_err_t err; 
     
     ESP_ERROR_CHECK(esp_netif_init());
@@ -200,47 +252,32 @@ void init_wifi_tx(void) {
 
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
-    if (ret == ESP_OK && wifi_config.sta.ssid[0] != '\0' && false) {
-        // cfg is valid.
-        ESP_LOGI(TX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
+    if (ret == ESP_OK && wifi_config.sta.ssid[0] == '\0') {
+        // no valid config
+        if (! setup_requested) {
+            ESP_LOGE(TX_TAG, "no valid WiFi credentials found - press setup!")
+            vTaskDelete(NULL);
+        } 
     } else {
-        ESP_LOGW(TX_TAG, "No saved Wi-Fi credentials found. Using default.");
-        memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
-        strncpy((char*)wifi_config.sta.ssid, SSID, sizeof(wifi_config.sta.ssid));
-        strncpy((char*)wifi_config.sta.password, PASS, sizeof(wifi_config.sta.password));
-        wifi_config.sta.threshold.authmode = ESP_WIFI_SCAN_AUTH_MODE_THRESHOLD;
-        // wifi_config.sta.sae_pwe_h2e = ESP_WIFI_SAE_MODE,    // this is for WPA3
-        // wifi_config.sta.sae_h2e_identifier = H2E_IDENTIFIER,
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // For STA mode
-        // ESP_ERROR_CHECK(esp_wifi_set_protocol(WIFI_IF_AP, WIFI_PROTOCOL_11AX));             // we want 11AX only 
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
+        wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK;                                // not more, not less. 
     }
 
-    esp_event_handler_instance_t instance_any_id;
-    esp_event_handler_instance_t instance_got_ip;
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_sta_event_handler,
-                                                        NULL,
-                                                        &instance_any_id));
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(IP_EVENT,
-                                                        IP_EVENT_STA_GOT_IP,
-                                                        &wifi_sta_event_handler,
-                                                        NULL,
-                                                        &instance_got_ip));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &got_ip_event_handler, NULL));
 
-    // esp_netif_t netif = esp_netif_get_default_netif();
-    // esp_netif_set_hostname(netif, "wgk_sender");
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
-
-/*
-    err = esp_wifi_set_protocol(WIFI_IF_STA, WIFI_PROTOCOL_11AX);
-    if (err != ESP_OK) {
-        ESP_LOGW(TX_TAG, "esp_wifi_set_protocol returned err %d", err); 
-    }
-*/
     ESP_ERROR_CHECK(esp_wifi_start() );
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
+    
+    if (setup_requested) {
+        ESP_LOGI(TX_TAG, "setup requested, starting wps...");
+        ESP_ERROR_CHECK(esp_wifi_wps_enable(&config));
+        ESP_ERROR_CHECK(esp_wifi_wps_start(0));    
+    } else {
+        ESP_LOGI(TX_TAG, "normal STA startup...");
+    }        
     
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
@@ -279,7 +316,7 @@ static heap_trace_record_t trace_record[NUM_RECORDS];
 */ 
 
 // mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
-void udp_tx_task(void *pvParameters) {
+void udp_tx_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
     int buf_size = 40960;  // UDP buffer size - adjust!
@@ -348,6 +385,51 @@ void udp_tx_task(void *pvParameters) {
     // should never be reached
     vTaskDelete(NULL);
 }
+
+#ifdef LATENCY_MEAS            
+void latency_meas_task(void *args) {
+    struct sockaddr_in dest_addr;
+    struct timeval timeout;
+    int err; 
+
+    dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);
+    dest_addr.sin_family = AF_INET;
+    dest_addr.sin_port = htons(PORT);
+
+    timeout.tv_sec = 10;
+    timeout.tv_usec = 0;
+
+    int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
+    if (sock < 0) {
+        ESP_LOGE(TX_TAG, "Unable to create socket: errno %d", errno);
+    }
+
+    // Set timeout
+    setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+    
+    // TODO UDP send buffer size - default 5760, can we make much bigger! 
+    // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
+
+    ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
+
+    memset (udpbuf, 0xaa, sizeof(udpbuf));         // clean up first
+
+    while (1) {
+        gpio_set_level(SIG_PIN, 1);    
+
+        err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        
+        ESP_LOGI (TX_TAG, "latency packet sent");
+
+        // release signal pin
+        gpio_set_level(SIG_PIN, 0);    
+        vTaskDelay(1000/portTICK_PERIOD_MS);
+    }
+}
+#endif
+
+
+
 
 bool init_gpio_tx (void) {
     bool setup_needed = false; 

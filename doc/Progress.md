@@ -1,5 +1,10 @@
 # Progress 
 
+2025-01-12
+
+ * WPS works fine with WPA3 (esp-idf examples)
+ * WPS pairing and normal operation work. 
+
 2025-01-10
 
 The two boards now talk exclusively 11AX with WPA3-SAE in 5 GHz. According to iperf, the UDP data rate with a payload of 1440 bytes is around 63 MBit/s. YAY! 

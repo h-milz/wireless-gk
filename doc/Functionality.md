@@ -21,3 +21,17 @@ At first-order approximation, the basic functionality will look like this:
   * upon each interrupt, the last received UDP buffer will be unpacked and sent to the DAC via DMA. 
   * Power: via USB-C for the ESP32 and via a separate LDO for the DAC, and by the guitar synth which provides the usual +/-7V for the op-amps via the GK cable. Care will be taken that all supply voltages will be as quiet as possible by using additional LDOs where needed.
 
+## WiFi Pairing
+
+When pressing and holding the WPS button, Sender and Receiver go to WPS mode. The Receiver is the WPS registrar, the Sender is the WPS enrollee. Our WPS process only supports PBC (Push Button Configuration), and WiFi encryption is tied to WPA3-SAE. 
+
+WPS may not be the bleeding edge way of proliferating the WiFi SSID and password, but is Good Enough (TM). 
+
+ * since we're using PBC, the known [weaknesses of WPS](https://en.wikipedia.org/wiki/Wi-Fi_Protected_Setup#Security) are ruled out.
+ * ESP-IDF supports also (any only!) WiFi EasyConnect with a QR code but the QR code is printed on the serial console, and the client then has to scan the QR code. A) it is cumbersome to use a PC with a serial console just for pairing, and B) integrating a camera into the client just for pairing seems farfetched. 
+ * SmartConfig requires a third party Android (or iOS?) app (of which I can't know how well security is implemented, and I do not want to rely on third party tools) and again: the QR code. 
+ * Using a separate channel like Bluetooth or ESP-NOW requires writing own (security relevant) code, and getting that to securely work can be a nightmare. Both ways also require pairing using a password first, which means it's a classical chicken-and-egg thing. 
+
+
+
+

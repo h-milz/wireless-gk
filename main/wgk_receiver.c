@@ -34,6 +34,8 @@ i2s_chan_handle_t i2s_tx_handle = NULL;
 TaskHandle_t i2s_tx_task_handle = NULL; 
 TaskHandle_t udp_rx_task_handle = NULL; 
 
+static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
+
 uint8_t i2sbuf[SLOT_SIZE_I2S * NUM_SLOTS_I2S * NFRAMES];
 
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
@@ -152,23 +154,68 @@ void i2s_tx_task(void *args) {
     }    
 }
 
-static void wifi_ap_event_handler(void* arg, esp_event_base_t event_base,
-                                    int32_t event_id, void* event_data) {
-    if (event_id == WIFI_EVENT_AP_STACONNECTED) {
-        wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
-        ESP_LOGI(RX_TAG, "station "MACSTR" join, AID=%d",
-                 MAC2STR(event->mac), event->aid);
-    } else if (event_id == WIFI_EVENT_AP_STADISCONNECTED) {
-        wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
-        ESP_LOGI(RX_TAG, "station "MACSTR" leave, AID=%d, reason=%d",
-                 MAC2STR(event->mac), event->aid, event->reason);
-    }
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+		int32_t event_id, void* event_data)
+{
+	switch (event_id) {
+	case WIFI_EVENT_AP_START:
+		ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_START");
+		break;
+	case WIFI_EVENT_AP_STADISCONNECTED:
+		{
+			ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_STADISCONNECTED");
+			wifi_event_ap_stadisconnected_t* event = (wifi_event_ap_stadisconnected_t*) event_data;
+			ESP_LOGI(RX_TAG, "station "MACSTR" leave, AID=%d, reason=%d",
+					MAC2STR(event->mac), event->aid, event->reason);
+		}
+		break;
+	case WIFI_EVENT_AP_STACONNECTED:
+		{
+			ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_STACONNECTED");
+			wifi_event_ap_staconnected_t* event = (wifi_event_ap_staconnected_t*) event_data;
+			ESP_LOGI(RX_TAG, "station "MACSTR" join, AID=%d",
+					MAC2STR(event->mac), event->aid);
+		}
+		break;
+	case WIFI_EVENT_AP_WPS_RG_SUCCESS:
+		{
+			ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_WPS_RG_SUCCESS");
+			wifi_event_ap_wps_rg_success_t *evt = (wifi_event_ap_wps_rg_success_t *)event_data;
+			ESP_LOGI(RX_TAG, "station "MACSTR" WPS successful",
+					MAC2STR(evt->peer_macaddr));
+		}
+		break;
+	case WIFI_EVENT_AP_WPS_RG_FAILED:
+		{
+			ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_WPS_RG_FAILED");
+			wifi_event_ap_wps_rg_fail_reason_t *evt = (wifi_event_ap_wps_rg_fail_reason_t *)event_data;
+			ESP_LOGI(RX_TAG, "station "MACSTR" WPS failed, reason=%d",
+						MAC2STR(evt->peer_macaddr), evt->reason);
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_disable());
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_enable(&wps_config));
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_start(NULL));
+		}
+		break;
+	case WIFI_EVENT_AP_WPS_RG_TIMEOUT:
+		{
+			ESP_LOGI(RX_TAG, "WIFI_EVENT_AP_WPS_RG_TIMEOUT");
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_disable());
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_enable(&wps_config));
+			ESP_ERROR_CHECK(esp_wifi_ap_wps_start(NULL));
+		}
+		break;
+	default:
+		break;
+	}
 }
 
 #define MAXLEN 32
 
-void init_wifi_rx(bool setup_needed) {
+void init_wifi_rx(bool setup_requested) {
     // we are WiFi AP 
+
+    char ssid[MAXLEN];
+    char pass[MAXLEN];
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
@@ -177,45 +224,54 @@ void init_wifi_rx(bool setup_needed) {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
     
+    // TODO auto channel
+    
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
-    if (ret == ESP_OK && wifi_config.ap.ssid[0] != '\0' && false) {
-        // cfg is valid.
-        ESP_LOGI(RX_TAG, "Found saved Wi-Fi credentials: SSID: %s", wifi_config.sta.ssid);
-    } else { 
-        char ssid[MAXLEN];
-        char pass[MAXLEN];
-        // ESP_LOGW(TAG, "No saved AP configuration found. Using default.");
+    ESP_LOGI (RX_TAG, "esp_wifi_get_config found ssid %s", (char *)wifi_config.ap.ssid);
+    ESP_LOGI (RX_TAG, "esp_wifi_get_config found pass %s", (char *)wifi_config.ap.password);
+    if (wifi_config.ap.ssid[0] == '\0' || ! strncmp ((char *)wifi_config.ap.ssid, "ESP_", 4)) {
+        // cfg is invalid.
+        if (! setup_requested) {
+            // we want the user to make an informed decision and not start WPS without consent
+            ESP_LOGE(RX_TAG, "no valid WiFi credentials found - press setup!");
+            // TODO blink "request setup"
+            vTaskDelete(NULL);
+        }
+        ESP_LOGW(RX_TAG, "setup requested - creating new WiFi credentials");
         memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
-        // we will later generate a random one in SETUP 
-        snprintf (ssid, MAXLEN, "AP%08lX%08lX%c", esp_random(), esp_random(), '\0');
+        // create random credentials.
+        // TODO create SSID from SHA256 value
+        snprintf (ssid, MAXLEN, "AP_%08lX%08lX%c", esp_random(), esp_random(), '\0');
         snprintf (pass, MAXLEN, "%08lX%08lX%c", esp_random(), esp_random(), '\0');
-        ESP_LOGI(RX_TAG, "generated random ssid %s pass %s", ssid, pass);
-        strncpy((char*)wifi_config.ap.ssid, SSID, sizeof(wifi_config.ap.ssid));
-        strncpy((char*)wifi_config.ap.password, PASS, sizeof(wifi_config.ap.password));
-        wifi_config.ap.ssid_len = strlen(SSID);
-        wifi_config.ap.channel = WIFI_CHANNEL;      // TODO can we scan the net and find free channels? 
+        strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
+        strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
+        wifi_config.ap.ssid_len = strlen(ssid);
+        ESP_LOGI(RX_TAG, "generated random ssid %s len %d pass %s", ssid, strlen(ssid), pass);
+        wifi_config.ap.channel = WIFI_CHANNEL;
         wifi_config.ap.max_connection = 2;          // TODO for debugging maybe, should be 1 in production
-        // wifi_config.ap.ssid_hidden = 1;             // security by obscurity ;-) 
         wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
-        ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); 
-        ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config) );    
-    }         
+    }    
     
-    ESP_ERROR_CHECK(esp_event_handler_instance_register(WIFI_EVENT,
-                                                        ESP_EVENT_ANY_ID,
-                                                        &wifi_ap_event_handler,
-                                                        NULL,
-                                                        NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
 
     wifi_protocols_t proto_config = {0, };
     proto_config.ghz_2g = 0;
     proto_config.ghz_5g = WIFI_PROTOCOL_11AX;                    // we want 5 GHz 11AX WPA3. 
 
-    ESP_ERROR_CHECK(esp_wifi_start() );
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_AP)); 
+    ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_AP, &wifi_config));    
+
+    ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
     ESP_ERROR_CHECK(esp_wifi_set_protocols(WIFI_IF_AP, &proto_config));            
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?             
+    
+    if (setup_requested) {
+    	ESP_ERROR_CHECK(esp_wifi_ap_wps_enable(&wps_config));
+  		ESP_ERROR_CHECK(esp_wifi_ap_wps_start(NULL));
+  		ESP_LOGI(RX_TAG, "setup requested, enering wps ap registrar mode");
+    }
 
     ESP_LOGI(RX_TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
              wifi_config.ap.ssid, wifi_config.ap.password, WIFI_CHANNEL);
@@ -393,11 +449,4 @@ bool init_gpio_rx (void) {
 }
 
 
-void rx_setup (void) {
-    // TODO start actual setup mode
-    // on Rx, this means 
-    // - generate new WiFi credentials
-    // - store them in NVS
-    // - start AP & WPS
-}
 

@@ -163,6 +163,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
     switch (event_id) {
         case WIFI_EVENT_STA_START:
             ESP_LOGI(TX_TAG, "WIFI_EVENT_STA_START");
+            esp_wifi_connect();
             break;
         case WIFI_EVENT_STA_DISCONNECTED:
             ESP_LOGI(TX_TAG, "WIFI_EVENT_STA_DISCONNECTED");
@@ -181,6 +182,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                 s_retry_num = 0;
             } else {
                 ESP_LOGI(TX_TAG, "Failed to connect!");
+                xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
             }
 
             break;
@@ -232,10 +234,10 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 
 
 static void got_ip_event_handler(void* arg, esp_event_base_t event_base,
-                             int32_t event_id, void* event_data)
-{
+                                 int32_t event_id, void* event_data) {
     ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
     ESP_LOGI(TX_TAG, "got ip: " IPSTR, IP2STR(&event->ip_info.ip));
+    xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
 }
 
 
@@ -252,6 +254,8 @@ void init_wifi_tx(bool setup_requested) {
 
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
+    ESP_LOGI (TX_TAG, "esp_wifi_get_config found ssid %s", (char *)wifi_config.ap.ssid);
+    ESP_LOGI (TX_TAG, "esp_wifi_get_config found pass %s", (char *)wifi_config.ap.password);
     if (ret != ESP_OK || wifi_config.sta.ssid[0] == '\0') {
         // no valid config
         if (! setup_requested) {
@@ -283,7 +287,7 @@ void init_wifi_tx(bool setup_requested) {
     
     esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
-    ESP_LOGI(TX_TAG, "wifi_init_sta finished.");
+    // ESP_LOGI(TX_TAG, "wifi_init_sta finished.");
 
     /* Waiting until either the connection is established (WIFI_CONNECTED_BIT) or connection failed for the maximum
      * number of re-tries (WIFI_FAIL_BIT). The bits are set by event_handler() (see above) */
@@ -295,6 +299,7 @@ void init_wifi_tx(bool setup_requested) {
     /* xEventGroupWaitBits() returns the bits before the call returned, hence we can test which event actually
      * happened. */
     if (bits & WIFI_CONNECTED_BIT) {
+        int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
         ESP_LOGI(TX_TAG, "connected to ap SSID:%s password:%s",
                  wifi_config.sta.ssid, wifi_config.sta.password);
     } else if (bits & WIFI_FAIL_BIT) {

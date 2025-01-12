@@ -101,6 +101,7 @@ void app_main(void) {
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND) {
       ESP_ERROR_CHECK(nvs_flash_erase());
       ret = nvs_flash_init();
+      ESP_LOGW(TAG, "nvs erase, init"); 
     }
     ESP_ERROR_CHECK(ret);
     s_wifi_event_group = xEventGroupCreate();
@@ -122,7 +123,7 @@ void app_main(void) {
         // returns true if setup was pressed
         setup_needed = init_gpio_tx();
         if (setup_needed) {   // setup needed
-            nvs_flash_erase();
+            ESP_ERROR_CHECK(nvs_flash_erase());
             nvs_flash_init();
             ESP_LOGI(TAG, "setup requested, entering setup mode");
         }
@@ -173,7 +174,7 @@ void app_main(void) {
         // returns true if setup was pressed
         setup_needed = init_gpio_rx();
         if (setup_needed) {   // setup needed
-            nvs_flash_erase();
+            ESP_ERROR_CHECK(nvs_flash_erase());
             nvs_flash_init();
             ESP_LOGI(TAG, "setup requested, entering setup mode");
         }

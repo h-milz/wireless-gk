@@ -154,6 +154,7 @@ void i2s_tx_task(void *args) {
     }    
 }
 
+
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 		int32_t event_id, void* event_data)
 {
@@ -209,6 +210,75 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 	}
 }
 
+/*
+ * scan the network for the best free channel
+ */ 
+
+#define MAX_AP_RECORDS 20
+#define CHAN_MAX 177
+// https://en.wikipedia.org/wiki/List_of_WLAN_channels
+static int channels[] = { 36, 40, 44, 48, 52, 56, 60, 64, 68, 96, 100, 104, 
+                          108, 112, 116, 120, 124, 128, 132, 136, 140, 144, 
+                          149, 153, 157, 161, 165, 169, 173, 177 }; 
+static int channel_usage[CHAN_MAX+1] = {0};  // For 5GHz use 
+static wifi_ap_record_t ap_records[MAX_AP_RECORDS];
+
+int find_free_channel(void) {
+    // country settings? 
+    
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,      // Scan all channels
+        .show_hidden = false,
+        .scan_type = WIFI_SCAN_TYPE_PASSIVE,
+    };
+
+    // blink "channel scan"
+    ESP_LOGI(RX_TAG, "performing channel scan");
+    esp_netif_create_default_wifi_sta();
+
+    wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_wifi_init(&cfg));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
+
+    uint16_t ap_count = 0;
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_num(&ap_count));
+    ESP_LOGI(RX_TAG, "Found %d access points", ap_count);
+
+    if (ap_count > MAX_AP_RECORDS) {
+        ap_count = MAX_AP_RECORDS;
+    }
+
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_count, ap_records));
+
+    // Analyze channel usage
+    for (int i = 0; i < ap_count; i++) {
+        ESP_LOGI(RX_TAG, "SSID: %s, Channel: %d, RSSI: %d", ap_records[i].ssid, ap_records[i].primary, ap_records[i].rssi);
+        channel_usage[ap_records[i].primary]++;
+    }
+
+    // Select the channel with the least congestion (least number of APs) 
+    int best_channel = 0;
+    int min_usage = INT_MAX;
+    for (int i = 0; i < sizeof(channels)/sizeof(int); i++) {
+        if (channel_usage[channels[i]] < min_usage) {
+            best_channel = channels[i];
+            min_usage = channel_usage[channels[i]];
+        }
+    }
+
+    ESP_LOGI(RX_TAG, "Best channel: %d with usage count: %d", best_channel, min_usage);
+    // esp_wifi_set_mode(WIFI_MODE_NULL); 
+    ESP_ERROR_CHECK(esp_wifi_stop());
+    esp_netif_destroy_default_wifi(WIFI_IF_STA);
+    return (best_channel); 
+}
+
+
 #define MAXLEN 32
 
 void init_wifi_rx(bool setup_requested) {
@@ -219,12 +289,15 @@ void init_wifi_rx(bool setup_requested) {
 
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
+
+    // TODO auto channel
+    int channel = find_free_channel(); 
+    ESP_LOGI(RX_TAG, "using free channel %d", channel);
+    
     esp_netif_create_default_wifi_ap();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
-    
-    // TODO auto channel
     
     wifi_config_t wifi_config; 
     int ret = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
@@ -248,7 +321,7 @@ void init_wifi_rx(bool setup_requested) {
         strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
         wifi_config.ap.ssid_len = strlen(ssid);
         ESP_LOGI(RX_TAG, "generated random ssid %s len %d pass %s", ssid, strlen(ssid), pass);
-        wifi_config.ap.channel = WIFI_CHANNEL;
+        wifi_config.ap.channel = channel;
         wifi_config.ap.max_connection = 2;          // TODO for debugging maybe, should be 1 in production
         wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
     }    

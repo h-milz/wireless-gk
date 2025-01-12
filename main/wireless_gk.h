@@ -231,7 +231,7 @@ void udp_rx_task(void *args);
 bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx); 
 void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
-void rx_setup (void);
+int find_free_channel(void);
 
 // main stuff
 typedef struct { 

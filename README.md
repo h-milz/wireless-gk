@@ -20,21 +20,21 @@ This triggered my wish to restart my former idea with more recent components usi
  
 Primarly for marketing reasons, everything is supposed to work with 24 bit resolution, 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16/32 or 16/36 would probably be enough. The downside to this is, it will require a higher over-the-air bandwidth (see **Alternative Approaches** below). 
 
-Please check the [Components](doc/Components.md) file for more information. 
+Please check the [Components](doc/Components.md) and [Functionality](doc/Functionality.md) sections for more information. 
 
 ## A Word About Using WiFi
 
-In order to keep latency low and resilience against network congestion high, the combo uses a private peer-to-peer WiFi6 802.11AX network with WPA3 authentication on the 5 GHz band. 
+In order to keep latency low and resilience against network congestion high, the combo uses a private peer-to-peer WiFi6 802.11AX network with WPA3 authentication on the 5 GHz band, using UDP as the transport protocol. 
 
-The net WiFi data rate is 8 channels x 24 bytes per channel x 44100 samples per second = 8.4672 Mbps, which is well within the theoretical net data rate for [WIFI_PHY_RATE_MCS7_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t) -- in fact, I measured a maximum UDP throughput between 2 ESP32-C5 boards of around 63 MBit/s using iperf. 
+The theoretical net WiFi data rate is 44100 frames per second * 256 bits per frame = 11.2896 Mbps, which is well within the range for [WIFI_PHY_RATE_MCS7_SGI](https://docs.espressif.com/projects/esp-idf/en/latest/esp32c5/api-reference/network/esp_wifi.html#_CPPv415wifi_phy_rate_t) -- in fact, I measured a maximum UDP throughput between 2 ESP32-C5 boards of around 63 MBit/s using iperf.
 
-To keep latency caused by the UDP protocol overhead low, I collect a number of 8-slot samples and send batches of samples across, at the expense of a short delay. The maximum UDP payload of 1472 bytes allows for collecting 60 samples per batch, which sums up to 1440 bytes. ADC conversion of 60 samples takes 1.36 ms. 
+Sending 44100 packets of 32 bytes per second would be very bandwidth inefficient because the header is also 28 bytes, and it would overwhelm the processor due to the huge interrupt rate, causing packet losses. This can be mitigated by sending multiple frames in batches so that [IP framentation](https://en.wikipedia.org/wiki/IP_fragmentation) is just avoided. Fragmentation occurs when datagrams are larger than the Maximum Transmission Unit (MTU) which is commonly 1500 bytes including the TCP or UDP and IP headers. For UDP, the maximum payload avoiding fragmentation is 1472 bytes. This would allow to send 46 frames per datagram, 958 datagrams per second. 
 
-The measured UDP latency for 1440 byte packets between the two boards proved to be in the 800 µs range. This means the overall latency will be of the order of magnitude of 2.2 ms. 
+On the other hand, we can reduce the data rate by reducing the 32 bit samples to 24 bit samples, which is enough (see [Components](doc/Components.md)). This way, we can send 60 frames per datagram, and 735 datagrams per second. The conversion of 60 frames takes 60 * 22.7 µs = 1.36 ms, which is then the basic A/D conversion per-sample latency not counting the network latency. 
+
+The measured UDP latency for 1440 byte packets between the two boards proved to be in the 800 µs range. This means the overall latency will be of the order of magnitude of 2.2 ms, give or take. 
 
 At the end of the day you need to choose between the devil and the deep blue sea I suppose. I'm all open for plausible proposals for a better (and technically feasible) technical design. 
-
-At first-order approximation, the basic functionality will look described in the [Functionality](doc/Functionality.md) section. 
 
 ## User Interface
 
@@ -67,7 +67,7 @@ Also, in the VGuitarForum, not even 350 people could be found to crowdfund a sol
 
 ## Building Prototypes
 
-In the past. I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
+In the past, I had various PCBs made and (pre-)assembled by [JLCPCB.com](https://jlcpcb.com/). They provide good quality at a decent price, and together with their partner [LCSC.com](https://www.lcsc.com/) they have some 100,000 common parts in stock. (No I am not affiliated, just a satisfied customer.)  They will not assemble the ESP32-C5 module, the ADC, the DAC, or the GK socket, though, simply because they usually don't have any in stock. While the ESP module and the GK socket are easy to solder for someone with good soldering experience, the ADC and DAC have a super small QFN case which can be a challenge if you're not used to working with small SMD parts. 
 
 I'm not going to make any attempt to commercialize something. Instead, everything will be open source (schematics, PCB layouts, codes, ...) and hopefully community developed and supported. Which does not mean that a group of dedicated people could not build and ship small batches of devices at cost price, plus support contracts for pro users, as long as the prerequisites of the [LICENSE](COPYING) are observed. If you want to participate, please be familiar with the ESP-IDF, git, and Github. 
 

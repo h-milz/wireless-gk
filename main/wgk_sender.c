@@ -61,7 +61,7 @@ void i2s_rx_task(void *args) {
     int i, j;
     uint32_t size;
     uint8_t *dmabuf;
-    uint32_t loops = 0, led = 0;
+    uint32_t loops = 0, led = 0x00;
     uint32_t evt_p;
     dma_params_t *dma_params;
     uint32_t nsamples = NFRAMES; // default
@@ -92,6 +92,9 @@ void i2s_rx_task(void *args) {
         p++;
 #endif
         // read DMA buffer and pack
+#ifdef TX_TEST
+        memcpy (udpbuf, dmabuf, size);         
+#else        
         memset (udpbuf, 0, sizeof(udpbuf));         // clean up first
         for (i=0; i<NFRAMES; i++) {
             for (j=0; j<NUM_SLOTS_I2S; j++) {                
@@ -102,12 +105,15 @@ void i2s_rx_task(void *args) {
                         SLOT_SIZE_UDP);
             }                    
         }
+#endif
         // count the first sample
         // memcpy((uint32_t *)udpbuf, &loops, 4);
+#if 0        
         udpbuf[0] = (loops & 0xff0000) >> 16;
         udpbuf[1] = (loops & 0xff00) >> 8;
         udpbuf[2] = (loops & 0xff);
         udpbuf[3] = 0xff;
+#endif         
         // udpbuf[size-1] = 0xff;
 #ifdef TX_DEBUG        
         _log[p].loc = 5;
@@ -149,15 +155,44 @@ void i2s_rx_task(void *args) {
         // blink LED
         loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
-            led = (led + 1) % 2;
-            gpio_set_level(LED_PIN, led);
+            // led ^= 0x01; // toggle
+            // gpio_set_level(LED_PIN, led);
+            for (i=0; i<NUM_SLOTS_I2S+2; i++) {
+                for (j=0; j<SLOT_SIZE_I2S; j++) {
+                    printf ("%02x", dmabuf[i * SLOT_SIZE_I2S +j]);   
+                }                    
+                printf (" ");             
+            }
+            printf ("\n");
         }
     }    
 }
 
+
+#ifdef TX_TEST
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
-                                int32_t event_id, void* event_data)
-{
+                                int32_t event_id, void* event_data) {
+    if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_START) {
+        esp_wifi_connect();
+    } else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED) {
+        if (s_retry_num < MAX_RETRY) {
+            esp_wifi_connect();
+            s_retry_num++;
+            ESP_LOGI(TX_TAG, "retry to connect to the AP");
+        } else {
+            xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
+        }
+        ESP_LOGI(TX_TAG,"connect to the AP fail");
+    } else if (event_base == IP_EVENT && event_id == IP_EVENT_STA_GOT_IP) {
+        ip_event_got_ip_t* event = (ip_event_got_ip_t*) event_data;
+        ESP_LOGI(TX_TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
+        s_retry_num = 0;
+        xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
+    }
+}
+#else
+static void wifi_event_handler(void* arg, esp_event_base_t event_base,
+                                int32_t event_id, void* event_data) {
     static int ap_idx = 1;
 
     switch (event_id) {
@@ -170,6 +205,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             if (s_retry_num < MAX_RETRY) {
                 esp_wifi_connect();
                 s_retry_num++;
+                ESP_LOGI(TX_TAG, "retry to connect to the AP");
             } else if (ap_idx < s_ap_creds_num) {
                 /* Try the next AP credential if first one fails */
 
@@ -232,7 +268,7 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
             break;
     }
 }
-
+#endif
 
 static void got_ip_event_handler(void* arg, esp_event_base_t event_base,
                                  int32_t event_id, void* event_data) {
@@ -253,10 +289,23 @@ void init_wifi_tx(bool setup_requested) {
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
+    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
+    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &got_ip_event_handler, NULL));
+
+#ifdef TX_TEST
+    wifi_config_t wifi_config = {
+        .sta = {
+            .ssid = SSID, 
+            .password = PASS,
+            .threshold.authmode = WIFI_AUTH_WPA2_WPA3_PSK,
+        }
+    }; 
+#else 
     wifi_config_t wifi_config; 
+
     int ret = esp_wifi_get_config(WIFI_IF_STA, &wifi_config);
-    ESP_LOGI (TX_TAG, "esp_wifi_get_config found ssid %s", (char *)wifi_config.ap.ssid);
-    ESP_LOGI (TX_TAG, "esp_wifi_get_config found pass %s", (char *)wifi_config.ap.password);
+    ESP_LOGI (TX_TAG, "esp_wifi_get_config found ssid %s", (char *)wifi_config.sta.ssid);
+    ESP_LOGI (TX_TAG, "esp_wifi_get_config found pass %s", (char *)wifi_config.sta.password);
     if (ret != ESP_OK || wifi_config.sta.ssid[0] == '\0') {
         // no valid config
         if (! setup_requested) {
@@ -266,17 +315,15 @@ void init_wifi_tx(bool setup_requested) {
             vTaskDelete(NULL);
         } 
     }
-    
     wifi_config.sta.threshold.authmode = WIFI_AUTH_WPA3_PSK;                                // not more, not less.     
-    ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
-    ESP_ERROR_CHECK(esp_event_handler_register(IP_EVENT, IP_EVENT_STA_GOT_IP, &got_ip_event_handler, NULL));
-
+#endif
+    
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(WIFI_IF_STA, &wifi_config));
 
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_band_mode(WIFI_BAND_MODE_5G_ONLY));
-    
+
     if (setup_requested) {
         ESP_LOGI(TX_TAG, "setup requested, starting wps...");
         // TODO blink "starting wps" 

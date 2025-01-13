@@ -27,7 +27,7 @@ EventGroupHandle_t s_wifi_event_group;
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-uint8_t udpbuf[3 * NUM_SLOTS_UDP * NFRAMES];
+uint8_t udpbuf[SLOT_SIZE_UDP * NUM_SLOTS_UDP * NFRAMES];
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 
@@ -84,7 +84,7 @@ void monitor_task(void *args) {
             ESP_LOGI (TAG, "task %s, HWM %d", task_name, hwm);
         }
         ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-        ESP_LOGI (TAG, "min free heap size: %u", esp_get_minimum_free_heap_size());
+        ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
 
         vTaskDelay (1000/portTICK_PERIOD_MS);
     }
@@ -142,7 +142,7 @@ void app_main(void) {
         // this will later be i2s_channel_init_tdm_mode(). 
 #ifdef I2S_STD
         i2s_channel_init_std_mode(i2s_rx_handle, &i2s_rx_cfg);
-#elif I2S_TDM        
+#else
         i2s_channel_init_tdm_mode(i2s_rx_handle, &i2s_rx_cfg);
 #endif        
 
@@ -192,7 +192,7 @@ void app_main(void) {
         // this will later be i2s_channel_init_tdm_mode(). 
 #ifdef I2S_STD
         i2s_channel_init_std_mode(i2s_tx_handle, &i2s_tx_cfg);
-#elif I2S_TDM        
+#else
         i2s_channel_init_tdm_mode(i2s_tx_handle, &i2s_tx_cfg);
 #endif               
 
@@ -204,7 +204,7 @@ void app_main(void) {
 
         // TODO strip down stack sizes
         // create I2S Tx task
-        // xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
+        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
@@ -215,7 +215,7 @@ void app_main(void) {
             .on_sent = i2s_tx_callback,
             .on_send_q_ovf = NULL,
         };
-        // i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
+        i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
         

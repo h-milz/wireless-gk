@@ -61,7 +61,7 @@
 
 #ifdef I2S_STD
 #include "driver/i2s_std.h"
-#elif I2S_TDM
+#else
 #include "driver/i2s_tdm.h"
 #endif
 
@@ -79,11 +79,11 @@
  *         The default MTU size for WiFi is 1500, resulting in a maximum payload of 1472 byte.
  *         We send NSAMPLES * NUM_SLOTS_UDP * SLOT_SIZE_UDP byte = 1440 byte. 61 frames would work as well. 
  */ 
-#define NFRAMES                 60                      // the number of frames we want to send in a datagram
+#define NFRAMES                 40                      // the number of frames we want to send in a datagram
 #define NUM_SLOTS_I2S           2                       // number of channels in one sample, 2 for stereo, 8 for 8-channel audio
 #define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
 #define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each
-#define SLOT_SIZE_UDP           3                       // UDP has 3-byte samples.
+#define SLOT_SIZE_UDP           4                       // UDP has 3-byte samples.
 #define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
@@ -95,12 +95,16 @@
 
 // WiFi stuff
 // this will later be replaced by random values created in SETUP and proliferated via WPS
-#define SSID "WGK" 
-#define PASS "start123"
-#define WIFI_CHANNEL 100 
+#define TX_TEST
 
-// UDP stuff
-#define RX_IP_ADDR "192.168.4.1"  // 
+#ifdef TX_TEST
+#define SSID "FRITZBox6660" // "WGK" 
+#define PASS "gr9P.q7HZ.Lod9" // "start123"
+#define RX_IP_ADDR "192.168.20.3"
+#else
+#define RX_IP_ADDR "192.168.4.1" 
+#endif
+#define WIFI_CHANNEL 100 
 #define PORT 45678
 
 #ifndef MIN
@@ -129,7 +133,7 @@ extern EventGroupHandle_t s_wifi_event_group;
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
 // UDP stuff
-extern uint8_t udpbuf[3 * NUM_SLOTS_UDP * NFRAMES];
+extern uint8_t udpbuf[SLOT_SIZE_UDP * NUM_SLOTS_UDP * NFRAMES];
 
 // I2S stuff
 // The channel config is the same for both. 
@@ -147,7 +151,7 @@ static i2s_chan_config_t i2s_chan_cfg = {
 // I2S Rx config for the sender
 #ifdef I2S_STD
 static i2s_std_config_t i2s_rx_cfg = {
-#elif I2S_TDM
+#else
 static i2s_tdm_config_t i2s_rx_cfg = {
 #endif
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
@@ -158,9 +162,9 @@ static i2s_tdm_config_t i2s_rx_cfg = {
     },
 #ifdef I2S_STD
     .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO),
-#elif I2S_TDM
+#else
     .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO,
-                                  I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
+                                  I2S_TDM_SLOT0 | I2S_TDM_SLOT1 ), // | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
 //                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),
 #endif
     .gpio_cfg = {
@@ -180,7 +184,7 @@ static i2s_tdm_config_t i2s_rx_cfg = {
    // I2S Tx Config for the Receiver
 #ifdef I2S_STD   
 static i2s_std_config_t i2s_tx_cfg = {
-#elif I2S_TDM
+#else
 static i2s_tdm_config_t i2s_tx_cfg = {
 #endif
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
@@ -191,7 +195,7 @@ static i2s_tdm_config_t i2s_tx_cfg = {
     },
 #ifdef I2S_STD
     .slot_cfg = I2S_STD_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO),
-#elif I2S_TDM
+#else
     .slot_cfg = I2S_TDM_MSB_SLOT_DEFAULT_CONFIG(I2S_DATA_BIT_WIDTH, I2S_SLOT_MODE_STEREO,
                                   I2S_TDM_SLOT0 | I2S_TDM_SLOT1 | I2S_TDM_SLOT2 | I2S_TDM_SLOT3 ), 
 //                              | I2S_TDM_SLOT4 | I2S_TDM_SLOT5 | I2S_TDM_SLOT6 | I2S_TDM_SLOT7 ),

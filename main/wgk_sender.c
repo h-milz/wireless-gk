@@ -212,7 +212,8 @@ static void wifi_event_handler(void* arg, esp_event_base_t event_base,
                  * with legacy apps. So directly attempt connection here.
                  */
                 ESP_ERROR_CHECK(esp_wifi_wps_disable());
-                esp_wifi_connect();
+                // esp_wifi_connect(); 
+                esp_restart();    // because the wifi_connect() does not return to the originally calling routine
             }
             break;
         case WIFI_EVENT_STA_WPS_ER_FAILED:

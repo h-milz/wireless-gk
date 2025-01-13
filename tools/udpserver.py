@@ -6,7 +6,7 @@ import socket
 UDP_IP = "0.0.0.0"  # Listen on all available interfaces
 UDP_PORT = 45678     # Port to listen on
 OUTPUT_FILE = "i2s_data.raw"
-buf_size = 960
+buf_size = 1280     # 40 frames 32 byte each
 
 # Create a UDP socket
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -24,7 +24,7 @@ with open(OUTPUT_FILE, "wb") as file:
         
         # Write data to the file
         file.write(data)
-        file.flush()  # Ensure data is written to disk immediately
+        # file.flush()  # Ensure data is written to disk immediately
         packets = packets + 1
         # print (f"p = {packets}")
         if packets % 300 == 0:

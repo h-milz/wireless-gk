@@ -72,10 +72,10 @@ static int s_retry_num = 0;
 
 
 
-void monitor_task(void *pvParameters) {
+void monitor_task(void *args) {
     UBaseType_t hwm; 
     char *task_name; 
-    bool *sender = (bool *) pvParameters;
+    bool *sender = (bool *) args;
     TaskHandle_t tasks[] = { i2s_rx_task_handle, udp_tx_task_handle, i2s_tx_task_handle, udp_rx_task_handle, NULL };
     while (1) {
         for (int i=0; i<sizeof(tasks)/sizeof(TaskHandle_t); i++) {
@@ -84,6 +84,7 @@ void monitor_task(void *pvParameters) {
             ESP_LOGI (TAG, "task %s, HWM %d", task_name, hwm);
         }
         ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+        ESP_LOGI (TAG, "min free heap size: %u", esp_get_minimum_free_heap_size());
 
         vTaskDelay (1000/portTICK_PERIOD_MS);
     }

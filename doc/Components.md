@@ -12,6 +12,7 @@
 
   * connecting the device to the guitar will require a short GK cable of about 50 cm length. Such cables seem not to be available on the market, which means we will have to make our own stubs. In this case, as an option we could use 15-pin DB connectors (VGA connectors) which are much more rugged and smaller. 
  
+During the development stage I need to use a 2-channel ADC and DAC each because breadboard-capable breakout boards are easily available (not so for the 8-channels parts). This is a TI PCM1808 ADC and PCM5102 DAC. The data protocol accomodates 8 channels, though, and the real audio data will occupy channels #0 and #1 while the rest will be zeros for now. As soon as everything works for 2 channels, I'll probably begin to make the first version of a sender / receiver PCB where the actual parts can be evaluated. 
 
 ## Sample Rate
   

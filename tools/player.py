@@ -3,8 +3,8 @@
 import sys
 
 # Constants
-FRAME_SIZE = 32  # Each frame has 24 bytes (8 samples in S24_BE format)
-CHANNELS_TO_KEEP = 8  # We want to keep only the first 6 bytes (2 channels)
+FRAME_SIZE = 24  # Each frame has 24 bytes (8 samples in S24_BE format)
+CHANNELS_TO_KEEP = 6  # We want to keep only the first 6 bytes (2 channels)
 
 # Read and process input in chunks of FRAME_SIZE
 while True:

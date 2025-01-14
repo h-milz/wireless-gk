@@ -79,11 +79,11 @@
  *         The default MTU size for WiFi is 1500, resulting in a maximum payload of 1472 byte.
  *         We send NSAMPLES * NUM_SLOTS_UDP * SLOT_SIZE_UDP byte = 1440 byte. 61 frames would work as well. 
  */ 
-#define NFRAMES                 40                      // the number of frames we want to send in a datagram
+#define NFRAMES                 60                      // the number of frames we want to send in a datagram
 #define NUM_SLOTS_I2S           2                       // number of channels in one sample, 2 for stereo, 8 for 8-channel audio
 #define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
 #define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each
-#define SLOT_SIZE_UDP           4                       // UDP has 3-byte samples.
+#define SLOT_SIZE_UDP           3                       // UDP has 3-byte samples.
 #define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // 
 #define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one

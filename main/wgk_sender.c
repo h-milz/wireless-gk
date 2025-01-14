@@ -92,7 +92,7 @@ void i2s_rx_task(void *args) {
         p++;
 #endif
         // read DMA buffer and pack
-#ifdef TX_TEST
+#ifndef TX_TEST
         memcpy (udpbuf, dmabuf, size);         
 #else        
         memset (udpbuf, 0, sizeof(udpbuf));         // clean up first
@@ -101,7 +101,7 @@ void i2s_rx_task(void *args) {
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
                 memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                        dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
+                        dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
                         SLOT_SIZE_UDP);
             }                    
         }
@@ -157,7 +157,7 @@ void i2s_rx_task(void *args) {
         if (loops == 0) {
             // led ^= 0x01; // toggle
             // gpio_set_level(LED_PIN, led);
-            for (i=0; i<NUM_SLOTS_I2S+2; i++) {
+            for (i=0; i<NUM_SLOTS_I2S; i++) {
                 for (j=0; j<SLOT_SIZE_I2S; j++) {
                     printf ("%02x", dmabuf[i * SLOT_SIZE_I2S +j]);   
                 }                    

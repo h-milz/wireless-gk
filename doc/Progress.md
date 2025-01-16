@@ -1,5 +1,9 @@
 # Progress 
 
+2025-01-16
+
+ * live streaming between sender and receiver now. Listening to music, bridged between my smartphone and my hi-fi amp. Basically, this combo is now a generic wireless 8-channel 24/44 audio bridge. 48 kHz should work as well. 
+
 2025-01-14
 
  * live streaming audio to my Linux machine works using netcat and sox as a receiver. The data in the DMA buffer are signed integer 32 bit. This works with packing 32->24 bit and 2 stereo channels embedded in 8-slot frames.  The sound is pristine, no audible distortions, gaps or noise. I think this is the proof that the concept works. 

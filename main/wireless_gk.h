@@ -81,14 +81,17 @@
  */ 
 #define NFRAMES                 60                      // the number of frames we want to send in a datagram
 #define NUM_SLOTS_I2S           2                       // number of channels in one sample, 2 for stereo, 8 for 8-channel audio
-#define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
 #define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each
+#define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
 #define SLOT_SIZE_UDP           3                       // UDP has 3-byte samples.
 #define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // 
-#define DMA_BUFFER_COUNT        4                       // Number of DMA buffers. 
+#define NUM_DMA_BUFS            4                       // Number of DMA buffers. 
                                                         // 4 is enough because we pick up each individual one
                                                         // for sending we only use 2. 
-#define DMA_BUFFER_SIZE         NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each DMA buffer
+#define DMA_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each DMA buffer
+
+#define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
+#define NUM_UDP_BUFS            3
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define SAMPLE_RATE             44100                   // 44100
@@ -98,13 +101,10 @@
 #define TX_TEST
 
 #ifdef TX_TEST
-#define SSID "FRITZBox6660" // "WGK" 
-#define PASS "gr9P.q7HZ.Lod9" // "start123"
-#define RX_IP_ADDR "192.168.20.3"
-#else
-#define RX_IP_ADDR "192.168.4.1" 
+#define SSID "WGK" 
+#define PASS "start123"
 #endif
-#define WIFI_CHANNEL 100 
+#define RX_IP_ADDR "192.168.4.1" 
 #define PORT 45678
 
 #ifndef MIN
@@ -132,15 +132,15 @@ extern volatile log_t _log[];
 extern EventGroupHandle_t s_wifi_event_group;
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
-// UDP stuff
-extern uint8_t udpbuf[SLOT_SIZE_UDP * NUM_SLOTS_UDP * NFRAMES];
+// UDP buffers
+extern uint8_t *udpbuf[];
 
 // I2S stuff
 // The channel config is the same for both. 
 static i2s_chan_config_t i2s_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
-    .dma_desc_num = DMA_BUFFER_COUNT,
+    .dma_desc_num = NUM_DMA_BUFS,
     .dma_frame_num = NFRAMES, 
     .auto_clear_after_cb = false, 
     .auto_clear_before_cb = false, 

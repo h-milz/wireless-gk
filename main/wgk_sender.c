@@ -70,7 +70,7 @@ void i2s_rx_task(void *args) {
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
 #endif
 
-    memset(udpbuf, 0, sizeof(udpbuf));    
+    memset(udpbuf[0], 0, UDP_BUF_SIZE);    
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
 #ifdef TX_DEBUG
@@ -93,28 +93,22 @@ void i2s_rx_task(void *args) {
 #endif
         // read DMA buffer and pack
 #ifndef TX_TEST
-        memcpy (udpbuf, dmabuf, size);         
+        memcpy (udpbuf[0], dmabuf, size);         
 #else        
-        memset (udpbuf, 0, sizeof(udpbuf));         // clean up first
+        // memset (udpbuf[0], 0, UDP_BUF_SIZE);         // clean up first
         for (i=0; i<NFRAMES; i++) {
             for (j=0; j<NUM_SLOTS_I2S; j++) {                
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                memcpy (udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                         dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
                         SLOT_SIZE_UDP);
             }                    
         }
 #endif
         // count the first sample
-        // memcpy((uint32_t *)udpbuf, &loops, 4);
-#if 0        
-        udpbuf[0] = (loops & 0xff0000) >> 16;
-        udpbuf[1] = (loops & 0xff00) >> 8;
-        udpbuf[2] = (loops & 0xff);
-        udpbuf[3] = 0xff;
-#endif         
-        // udpbuf[size-1] = 0xff;
+        // memcpy((uint32_t *)udpbuf[0], &loops, 4);
+
 #ifdef TX_DEBUG        
         _log[p].loc = 5;
         _log[p].time = get_time_us_in_isr(); 
@@ -152,7 +146,7 @@ void i2s_rx_task(void *args) {
             vTaskDelete(NULL); 
         }
 #endif
-        // blink LED
+        // blink LED        
         loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
             // led ^= 0x01; // toggle
@@ -384,9 +378,6 @@ void udp_tx_task(void *args) {
     timeout.tv_sec = 10;
     timeout.tv_usec = 0;
 
-    // heap_trace_init_standalone(trace_record, NUM_RECORDS);
-    // heap_trace_start(HEAP_TRACE_ALL);
-    
     while (1) {
 
         int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -407,12 +398,11 @@ void udp_tx_task(void *args) {
 
             xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY);
             
-            err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udpbuf[0], UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             // ESP_LOGI(TX_TAG, "err=%d errno=%d", err, errno);
             if (err < 0) {
         	    if (errno == ENOMEM) {
         	        ESP_LOGW(TX_TAG, "lwip_sendto fail. %d", errno);
-                    ESP_LOGI (TX_TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
         	        vTaskDelay(10);
         	    } else if (errno == 118) {
         	        ESP_LOGE(TX_TAG, "network not connected, errno %d", errno);
@@ -467,12 +457,12 @@ void latency_meas_task(void *args) {
 
     ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
 
-    memset (udpbuf, 0xaa, sizeof(udpbuf));         // clean up first
+    memset (udpbuf[0], 0xaa, UDP_BUF_SIZE);         // fake data
 
     while (1) {
         gpio_set_level(SIG_PIN, 1);    
 
-        err = sendto(sock, udpbuf, sizeof(udpbuf), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        err = sendto(sock, udpbuf[0], UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         
         ESP_LOGI (TX_TAG, "latency packet sent");
 

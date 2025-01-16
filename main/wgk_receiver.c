@@ -106,7 +106,7 @@ void i2s_tx_task(void *args) {
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
                 memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
-                        udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                        udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                         SLOT_SIZE_UDP); 
             }
         }
@@ -223,6 +223,9 @@ static int channels[] = { 36, 40, 44, 48, 52, 56, 60, 64, 68, 96, 100, 104,
 static int channel_usage[CHAN_MAX+1] = {0};  // For 5GHz use 
 static wifi_ap_record_t ap_records[MAX_AP_RECORDS];
 
+// TODO as soon as ESP-IDF supports country settings for 5G, use them, 
+// preferably a safe mode that works internationally
+// very possible that wifi_scan_config_t will be set correctly anyway. 
 int find_free_channel(void) {
     // country settings? 
     
@@ -290,8 +293,11 @@ void init_wifi_rx(bool setup_requested) {
     ESP_ERROR_CHECK(esp_netif_init());
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
-    // TODO auto channel
+#ifdef TX_TEST
+    int channel = 100;
+#else    
     int channel = find_free_channel(); 
+#endif    
     ESP_LOGI(RX_TAG, "using free channel %d", channel);
     
     esp_netif_create_default_wifi_ap();
@@ -303,8 +309,13 @@ void init_wifi_rx(bool setup_requested) {
     int ret = esp_wifi_get_config(WIFI_IF_AP, &wifi_config);
     ESP_LOGI (RX_TAG, "esp_wifi_get_config found ssid %s", (char *)wifi_config.ap.ssid);
     ESP_LOGI (RX_TAG, "esp_wifi_get_config found pass %s", (char *)wifi_config.ap.password);
+#ifdef TX_TEST
+    if (true) {
+#else        
     if (wifi_config.ap.ssid[0] == '\0' || ! strncmp ((char *)wifi_config.ap.ssid, "ESP_", 4)) {
+#endif    
         // cfg is invalid.
+#ifndef TX_TEST
         if (! setup_requested) {
             // we want the user to make an informed decision and not start WPS without consent
             ESP_LOGE(RX_TAG, "no valid WiFi credentials found - press setup!");
@@ -312,15 +323,22 @@ void init_wifi_rx(bool setup_requested) {
             vTaskDelete(NULL);
         }
         ESP_LOGW(RX_TAG, "setup requested - creating new WiFi credentials");
+#endif        
         memset(&wifi_config, 0, sizeof(wifi_config)); // Clear structure
+#ifdef TX_TEST
+        strncpy((char*)wifi_config.ap.ssid, SSID, sizeof(wifi_config.ap.ssid));
+        strncpy((char*)wifi_config.ap.password, PASS, sizeof(wifi_config.ap.password));
+        wifi_config.ap.ssid_len = strlen(SSID);
+#else        
         // create random credentials.
         // TODO create SSID from SHA256 value
         snprintf (ssid, MAXLEN, "AP_%08lX%08lX%c", esp_random(), esp_random(), '\0');
         snprintf (pass, MAXLEN, "%08lX%08lX%c", esp_random(), esp_random(), '\0');
+        ESP_LOGI(RX_TAG, "generated random ssid %s len %d pass %s", ssid, strlen(ssid), pass);
         strncpy((char*)wifi_config.ap.ssid, ssid, sizeof(wifi_config.ap.ssid));
         strncpy((char*)wifi_config.ap.password, pass, sizeof(wifi_config.ap.password));
         wifi_config.ap.ssid_len = strlen(ssid);
-        ESP_LOGI(RX_TAG, "generated random ssid %s len %d pass %s", ssid, strlen(ssid), pass);
+#endif
         wifi_config.ap.channel = channel;
         wifi_config.ap.max_connection = 2;          // TODO for debugging maybe, should be 1 in production
         wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
@@ -347,7 +365,7 @@ void init_wifi_rx(bool setup_requested) {
     }
 
     ESP_LOGI(RX_TAG, "wifi_init_softap finished. SSID:%s password:%s channel:%d",
-             wifi_config.ap.ssid, wifi_config.ap.password, WIFI_CHANNEL);
+             wifi_config.ap.ssid, wifi_config.ap.password, channel);
 
 }
 
@@ -393,7 +411,7 @@ void udp_rx_task(void *args) {
 
         while(1) {
 
-            int len = recvfrom(sock, udpbuf, sizeof(udpbuf), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(sock, udpbuf[0], UDP_BUF_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
             ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
@@ -413,7 +431,7 @@ void udp_rx_task(void *args) {
                 break;
             }
             // Data received
-            // we do nothing else here. the i2s_tx_task will be clocked by the on_sent events and pick up the udpbuf accordingly. 
+            // we do nothing else here. the i2s_tx_task will be clocked by the on_sent events and pick up the udpbuf[0] accordingly. 
             // we may need 2 bufs in order to avoid race conditions. 
             // ESP_LOGI (RX_TAG, "packet received, len %d", len);
             // unpack datagram
@@ -425,8 +443,8 @@ void udp_rx_task(void *args) {
                 for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
                     // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
                     // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                    memcpy (i2sbuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
-                            udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                    memcpy (i2sbuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
+                            udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                             SLOT_SIZE_UDP); 
                 }
             }
@@ -437,6 +455,8 @@ void udp_rx_task(void *args) {
 #endif
             
             // and send
+            // for now, we write out the data directly, and let the I2S driver handle the timing internally. 
+            // in this case, we may not need to use the callback to reduce latency. 
             i2s_channel_write(i2s_tx_handle, i2sbuf, sizeof(i2sbuf), NULL, 1000);
 #ifdef RX_DEBUG        
             _log[p].loc = 5;

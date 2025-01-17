@@ -10,7 +10,7 @@
 
 2025-01-13
 
- * First light! Audio transferred from the sender to my Linux box (sine test signals and music). As tested with my oscilloscope, data is sent by the ADC MSB first, and the last byte of each 32 bit sample is null. So that's ok. But the data in the DMA buffer is reversed, that is, LSB first. Sounds strange in the loudspeakers if you miss this one. I assume this makes no difference when pumping the data into the DAC in the same order. My Linux machine loses a lot of packets, though, which may be due to the udpserver being in Python. Got to rewrite it in C. [This video](https://youtu.be/FOIhJvwpMKE) shows my experimental setup with the scope on the left displaying the word clock on top and the data bits below, and the ESP32-C5 DevKit and the ADC breakout board on the right. 
+ * First light! Audio transferred from the sender to my Linux box (sine test signals and music). As tested with my oscilloscope, data is sent by the ADC MSB first, and the last byte of each 32 bit sample is null. So that's ok. But the data in the DMA buffer is little endian, that is, LSB first. Sounds strange in the loudspeakers if you miss this one. I assume this makes no difference when pumping the data into the DAC in the same order. My Linux machine loses a lot of packets, though, which may be due to the udpserver being in Python. Got to rewrite it in C or use `netcat`. [This video](https://youtu.be/FOIhJvwpMKE) shows my experimental setup with the scope on the left displaying the word clock on top and the data bits below, and the ESP32-C5 DevKit and the ADC breakout board on the right.
 
 2025-01-12
 

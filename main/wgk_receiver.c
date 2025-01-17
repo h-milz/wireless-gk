@@ -387,7 +387,7 @@ void i2s_tx_task(void *args) {
 
 // udp_rx_task receives packets as they arrive, and puts them in udpbuf
 // we use multiple udpbufs as a ring buffer to avoid race conditions and lost packets
-
+#define NUM_UDP_BUFS_M_1 (NUM_UDP_BUFS - 1)
 void udp_rx_task(void *args) {
 
     int i, j;
@@ -428,7 +428,7 @@ void udp_rx_task(void *args) {
             // k = (k+1) % NUM_UDP_BUFS; 
             // k = (k+1) >= NUM_UDP_BUFS ? 0 : k+1; // this way, we must add 1 twice. but it's faster than modulo division
             // this is the fastest variant if the number of buffers is a power of 2: 
-            k = (k+1) & ~NUM_UDP_BUFS;
+            k = (k+1) & NUM_UDP_BUFS_M_1;
 #ifdef RX_DEBUG        
             _log[p].loc = 4;
             _log[p].time = get_time_us_in_isr(); 

@@ -36,124 +36,14 @@ TaskHandle_t udp_rx_task_handle = NULL;
 
 static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
 
-uint8_t i2sbuf[SLOT_SIZE_I2S * NUM_SLOTS_I2S * NFRAMES];
-
-IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    
-    // we pass the *dma_buf and size in a struct, by reference. 
-    static dma_params_t dma_params;
-    dma_params.dma_buf = event->dma_buf;
-    dma_params.size = event->size;
-#ifdef RX_DEBUG
-    _log[p].loc = 1;
-    _log[p].time = get_time_us_in_isr();
-    _log[p].ptr = event->dma_buf;
-    _log[p].size = event->size; 
-    p++;
-#endif
-    xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-    return (xHigherPriorityTaskWoken == pdTRUE);
-}    
+// uint8_t i2sbuf[SLOT_SIZE_I2S * NUM_SLOTS_I2S * NFRAMES];
+// pointer to the last successfully received UDP datagram
+static uint8_t *last_udp_buf = NULL; 
 
 #ifdef RX_DEBUG
-    char t[][15] = {"", "ISR", "begin loop", "after notify", "unpacking", "end loop", "recvfrom" }; 
+static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", "before recvfrom", "after recvfrom", "end i2s_tx loop" }; 
 #endif
     
-
-void i2s_tx_task(void *args) {
-    int i, j;
-    uint32_t size;
-    uint8_t *dmabuf;
-    uint32_t loops = 0, led = 0;
-    uint32_t evt_p;
-    dma_params_t *dma_params;
-    uint32_t nsamples = NFRAMES; // default
-    
-    // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
-    while(1) {     
-#ifdef RX_DEBUG
-        _log[p].loc = 2;
-        _log[p].time = get_time_us_in_isr();
-        p++;
-#endif    
-        // here we wait for the notify from the on_sent callback
-        // assume the udpbuf is available. 
-        xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
-        // convert back to pointer
-        dma_params = (dma_params_t *)evt_p;    // könnte man sparen, wenn man eine union nehmen würde. 
-        // and fetch pointer and size
-        dmabuf = dma_params->dma_buf;
-        size = dma_params->size;
-#ifdef RX_DEBUG        
-        _log[p].loc = 3;
-        _log[p].time = get_time_us_in_isr();
-        _log[p].ptr = dmabuf;
-        _log[p].size = size;
-        p++;
-#endif
-
-        // checksum? 
-        
-        // extract S1, S2
-
-        // nsamples = size / (NUM_SLOTS * SLOT_WIDTH / 8);
-        // ESP_LOGI(RX_TAG, "nsamples = %lu", nsamples);
-        // could result in a race condition? if udpbuf is currently written to? 
-        memset (dmabuf, 0, size);
-        for (i=0; i<NFRAMES; i++) {
-            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
-                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S, 
-                        udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                        SLOT_SIZE_UDP); 
-            }
-        }
-        stop_time = get_time_us_in_isr();
-        
-        
-#ifdef RX_DEBUG        
-        _log[p].loc = 4;
-        _log[p].time = get_time_us_in_isr(); 
-        p++;
-#endif    
-        
-            
-        // ESP_LOGI(RX_TAG, "p = %d", p);
-#ifdef RX_DEBUG
-        if (p >= NUM) {
-            i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
-            int q; 
-            uint32_t curr_time, prev_time=0;
-            for (q=0; q<p; q++) {
-                switch (_log[q].loc) {
-                    case 1:         // ISR
-                        curr_time = _log[q].time;
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, 
-                                curr_time - prev_time,
-                                (uint32_t) _log[q].ptr, _log[q].size);
-                        prev_time = curr_time;
-                        break; 
-                    default:
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
-                        break;
-                }                        
-            }
-            vTaskDelete(NULL); 
-        }
-#endif
-        // blink LED
-        loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
-        if (loops == 0) {
-            led = (led + 1) % 2;
-            gpio_set_level(LED_PIN, led);
-        }
-    }    
-}
-
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 		int32_t event_id, void* event_data)
@@ -370,12 +260,138 @@ void init_wifi_rx(bool setup_requested) {
 }
 
 
-// udp_rx_task receives packets as they arrive, and puts them in udpbuf. 
-// TODO do we need multiple udpbufs as a ring buffer? to avoid race conditions
+// on_sent callback, used to determine the pointer to the most recently emptied dma buffer
+IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
+    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    
+    // we pass the *dma_buf and size in a struct, by reference. 
+    static dma_params_t dma_params;
+    dma_params.dma_buf = (uint8_t *)event->dma_buf;
+    dma_params.size = (uint32_t)event->size;
+#ifdef RX_DEBUG
+    _log[p].loc = 0;
+    _log[p].time = get_time_us_in_isr();
+    _log[p].ptr = event->dma_buf;
+    _log[p].size = event->size; 
+    p++;
+#endif
+    xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    return (xHigherPriorityTaskWoken == pdTRUE);
+}    
+
+
+void i2s_tx_task(void *args) {
+    int i, j;
+    uint32_t size;
+    uint8_t *dmabuf;
+    uint32_t loops = 0, led = 0;
+    uint32_t evt_p;
+    dma_params_t *dma_params;
+    uint32_t nsamples = NFRAMES; // default
+    
+    // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
+    while(1) {     
+#ifdef RX_DEBUG
+        _log[p].loc = 1;
+        _log[p].time = get_time_us_in_isr();
+        p++;
+#endif    
+        // here we wait for the notify from the on_sent callback
+        xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
+        // convert back to pointer
+        dma_params = (dma_params_t *)evt_p;    
+        // and fetch pointer and size
+        dmabuf = dma_params->dma_buf;
+        size = dma_params->size;
+        if (last_udp_buf == NULL) {
+            ESP_LOGW(RX_TAG, "last_udp_buf = 0x%08lx", (uint32_t)last_udp_buf); 
+            continue;  // can happen during the very first loop(s).         
+        }
+        
+#ifdef RX_DEBUG        
+        _log[p].loc = 2;
+        _log[p].time = get_time_us_in_isr();
+        _log[p].ptr = dmabuf;
+        _log[p].size = size;
+        p++;
+#endif
+        
+        // checksum? should be checked in udp_rx_task, and leave last_udp_buf unchanged if checksum err. 
+        
+        // extract S1, S2
+        // can be handled by a separate task running every, say, 10 ms. 
+
+        // unpack and write to most recent free dma buffer
+        // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
+        for (i=0; i<NFRAMES; i++) {
+            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
+                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
+                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                 memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
+                         last_udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                         SLOT_SIZE_UDP); 
+            }
+        }
+#ifdef LATENCY_MEAS        
+        stop_time = get_time_us_in_isr();
+#endif        
+        
+#ifdef RX_DEBUG        
+        _log[p].loc = 3;
+        _log[p].time = get_time_us_in_isr(); 
+        _log[p].ptr = dmabuf;
+        _log[p].size = size;
+        p++;
+#endif    
+        
+            
+        // ESP_LOGI(RX_TAG, "p = %d", p);
+#ifdef RX_DEBUG
+        if (p >= NUM) {
+            i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
+            int q; 
+            uint32_t curr_time, prev_time=0;
+            for (q=0; q<p; q++) {
+                switch (_log[q].loc) {
+                    case 1:         // ISR
+                        curr_time = _log[q].time;
+                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
+                                t[_log[q].loc], _log[q].time, 
+                                curr_time - prev_time,
+                                (uint32_t) _log[q].ptr, _log[q].size);
+                        prev_time = curr_time;
+                        break; 
+                    default:
+                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
+                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
+                        break;
+                }                        
+            }
+            vTaskDelete(NULL); 
+        }
+#endif
+        // blink LED
+        loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
+        if (loops == 0) {
+            led = (led + 1) % 2;
+            gpio_set_level(LED_PIN, led);
+        }        
+#ifdef RX_DEBUG        
+        _log[p].loc = 6;
+        _log[p].time = get_time_us_in_isr(); 
+        p++;
+#endif    
+    }    
+}
+
+
+// udp_rx_task receives packets as they arrive, and puts them in udpbuf
+// we use multiple udpbufs as a ring buffer to avoid race conditions and lost packets
 
 void udp_rx_task(void *args) {
 
     int i, j;
+    int k = 0;          // udpbuf ring buffer index
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
     struct sockaddr_in dest_addr;
@@ -385,13 +401,11 @@ void udp_rx_task(void *args) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(PORT);
 
-    timeout.tv_sec = 10;
+    timeout.tv_sec = 1;       // 1 second timeout is plenty! 
     timeout.tv_usec = 0;
-#ifdef RX_DEBUG
-    char t[][15] = {"", "ISR", "begin loop", "after recvfrom", "unpacking", "i2s send", "end loop" }; 
-#endif
-    
 
+    last_udp_buf = udpbuf[0];    // in order to initialize a valid pointer address. 
+    
     while (1) {
 
         int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -411,82 +425,53 @@ void udp_rx_task(void *args) {
 
         while(1) {
 
-            int len = recvfrom(sock, udpbuf[0], UDP_BUF_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+            // k = (k+1) % NUM_UDP_BUFS; 
+            // k = (k+1) >= NUM_UDP_BUFS ? 0 : k+1; // this way, we must add 1 twice. but it's faster than modulo division
+            // this is the fastest variant if the number of buffers is a power of 2: 
+            k = (k+1) & ~NUM_UDP_BUFS;
+#ifdef RX_DEBUG        
+            _log[p].loc = 4;
+            _log[p].time = get_time_us_in_isr(); 
+            p++;
+#endif
+            int len = recvfrom(sock, udpbuf[k], UDP_BUF_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
             ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
 #endif
 
 #ifdef RX_DEBUG        
-            _log[p].loc = 6;
+            _log[p].loc = 5;
             _log[p].time = get_time_us_in_isr(); 
             _log[p].size = (uint32_t)len; 
             p++;
 #endif
-            // Error occurred during receiving
-            if (len == -1) {
+
+            // TODO checksum? should be checked in udp_rx_task, and leave last_udp_buf unchanged if checksum err. 
+            // is a 8 bit XOR checksum enough?
+                    
+            if (len == UDP_BUF_SIZE) {
+                // assume success. we copy the buffer pointer to last_udp_buf
+                // otherwise, the previous successful datagram will be used. 
+                last_udp_buf = udpbuf[k];
+            } else if (len == -1) {
+                // we ignore broken packets for now. 
+                ESP_LOGW(RX_TAG, "broken / lost packet");
                 continue; 
             } else if (len < 0) {
-                ESP_LOGE(RX_TAG, "recvfrom failed: errno %d", errno);
+                // TODO if we have a UDP timeout it's probably better to stop operation
+                // to avoid artifacts from the loudspeakers. 
+                ESP_LOGW(RX_TAG, "recvfrom failed: errno %d", errno);
+                // blink "network failure, press reset"
+                // vTaskDelete(NULL); 
                 break;
             }
-            // Data received
-            // we do nothing else here. the i2s_tx_task will be clocked by the on_sent events and pick up the udpbuf[0] accordingly. 
-            // we may need 2 bufs in order to avoid race conditions. 
-            // ESP_LOGI (RX_TAG, "packet received, len %d", len);
-            // unpack datagram
-            // this way, we depend on the UDP jitter ... 
-            // continue; 
-            // EOT
-            memset (i2sbuf, 0, sizeof(i2sbuf));
-            for (i=0; i<NFRAMES; i++) {
-                for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-                    // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
-                    // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                    memcpy (i2sbuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                            udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                            SLOT_SIZE_UDP); 
-                }
-            }
+            
 #ifdef RX_DEBUG        
             _log[p].loc = 4;
             _log[p].time = get_time_us_in_isr(); 
             p++;
 #endif
-            
-            // and send
-            // for now, we write out the data directly, and let the I2S driver handle the timing internally. 
-            // in this case, we may not need to use the callback to reduce latency. 
-            i2s_channel_write(i2s_tx_handle, i2sbuf, sizeof(i2sbuf), NULL, 1000);
-#ifdef RX_DEBUG        
-            _log[p].loc = 5;
-            _log[p].time = get_time_us_in_isr(); 
-            p++;
-            if (p >= NUM) {
-                i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
-                int q; 
-                uint32_t curr_time, prev_time=0;
-                for (q=0; q<p; q++) {
-                    switch (_log[q].loc) {
-                        case 1:         // ISR
-                            curr_time = _log[q].time;
-                            printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                    t[_log[q].loc], _log[q].time, 
-                                    curr_time - prev_time,
-                                    (uint32_t) _log[q].ptr, _log[q].size);
-                            prev_time = curr_time;
-                            break; 
-                        default:
-                            printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                    t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
-                            break;
-                    }                        
-                }
-                // vTaskDelete(NULL); 
-            }
-            
-#endif    
- 
         }    
     }
 }

@@ -137,10 +137,10 @@ void app_main(void) {
         
         // create udp buffers
         // we use only one in the sender. 
-        udpbuf[0] = (uint8_t *)malloc(UDP_BUF_SIZE); 
+        udpbuf[0] = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t)); 
         
         // set up I2S receive channel on the Sender
-        i2s_new_channel(&i2s_chan_cfg, NULL, &i2s_rx_handle);
+        i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
         // this will later be i2s_channel_init_tdm_mode(). 
 #ifdef I2S_STD
         i2s_channel_init_std_mode(i2s_rx_handle, &i2s_rx_cfg);
@@ -157,7 +157,7 @@ void app_main(void) {
         // create UDP Tx task
         xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
 
-        xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
+        // xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 
         // create I2S rx on_recv callback
         i2s_event_callbacks_t cbs = {
@@ -191,11 +191,11 @@ void app_main(void) {
         
         // create udp buffers
         for (int n=0; n<NUM_UDP_BUFS; n++) {
-            udpbuf[n] = (uint8_t *)malloc(UDP_BUF_SIZE); 
+            udpbuf[n] = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t)); 
         }
                 
         // set up I2S send channel on the Receiver
-        i2s_new_channel(&i2s_chan_cfg, &i2s_tx_handle, NULL);
+        i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);
         // this will later be i2s_channel_init_tdm_mode(). 
 #ifdef I2S_STD
         i2s_channel_init_std_mode(i2s_tx_handle, &i2s_tx_cfg);
@@ -209,9 +209,8 @@ void app_main(void) {
         
         xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
 
-        // TODO strip down stack sizes
         // create I2S Tx task
-        // xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
+        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
     
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
@@ -222,7 +221,7 @@ void app_main(void) {
             .on_sent = i2s_tx_callback,
             .on_send_q_ovf = NULL,
         };
-        // i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
+        i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
         

@@ -91,7 +91,7 @@
 #define DMA_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each DMA buffer
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
-#define NUM_UDP_BUFS            3
+#define NUM_UDP_BUFS            4                       // must be a power of 2 due to the way the buffer index is incremented
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define SAMPLE_RATE             44100                   // 44100
@@ -136,8 +136,19 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 extern uint8_t *udpbuf[];
 
 // I2S stuff
-// The channel config is the same for both. 
-static i2s_chan_config_t i2s_chan_cfg = {
+// The channel config is similar for both. 
+static i2s_chan_config_t i2s_tx_chan_cfg = {
+    .id = I2S_NUM_AUTO,
+    .role = I2S_ROLE_MASTER,
+    .dma_desc_num = 8, // NUM_DMA_BUFS,
+    .dma_frame_num = NFRAMES, 
+    .auto_clear_after_cb = true,     // we don't need to do that ourselves. 
+    .auto_clear_before_cb = false, 
+    .allow_pd = false, 
+    .intr_priority = 5, 
+};    
+
+static i2s_chan_config_t i2s_rx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
     .dma_desc_num = NUM_DMA_BUFS,
@@ -147,6 +158,7 @@ static i2s_chan_config_t i2s_chan_cfg = {
     .allow_pd = false, 
     .intr_priority = 5, 
 };    
+
 
 // I2S Rx config for the sender
 #ifdef I2S_STD

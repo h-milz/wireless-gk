@@ -36,7 +36,6 @@ static wifi_config_t wps_ap_creds[MAX_WPS_AP_CRED];
 static int s_ap_creds_num = 0;
 static int s_retry_num = 0;
 
-
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
@@ -98,7 +97,7 @@ void i2s_rx_task(void *args) {
         // memset (udpbuf[0], 0, UDP_BUF_SIZE);         // clean up first
         for (i=0; i<NFRAMES; i++) {
             for (j=0; j<NUM_SLOTS_I2S; j++) {                
-                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S
+                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
                 memcpy (udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                         dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
@@ -147,6 +146,7 @@ void i2s_rx_task(void *args) {
         }
 #endif
         // blink LED        
+/*        
         loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
             // led ^= 0x01; // toggle
@@ -159,6 +159,7 @@ void i2s_rx_task(void *args) {
             }
             printf ("\n");
         }
+*/        
     }    
 }
 

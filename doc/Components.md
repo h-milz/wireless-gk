@@ -37,3 +37,8 @@ It's not that other audio converters marketed with 24 or 32 bit resolution are s
   
 (side note: as I demonstrated on the [Filterdesign](Filterdesign.md) page, the analog circuitry will not be much better than 21 bits either.) 
 
+
+# Copyright and Licensing
+
+The material in this git repository is copyrighted by me and licensed to you by the [GNU General Public License V3](https://www.gnu.org/licenses/gpl-3.0.en.html). Commercial use without written permission is strictly forbidden. If you are interested, feel free to ask for a commercial license. 
+

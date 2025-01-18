@@ -37,4 +37,8 @@ From time to time there may be software updates with fixes or improvements, e.g.
  * the device will perform the update and reboot. 
  * needless to say that the integrity and authenticity of the upload image will be verified before the actual update. 
 
+# Copyright and Licensing
+
+The material in this git repository is copyrighted by me and licensed to you by the [GNU General Public License V3](https://www.gnu.org/licenses/gpl-3.0.en.html). Commercial use without written permission is strictly forbidden. If you are interested, feel free to ask for a commercial license. 
+
 

@@ -15,3 +15,10 @@ In an ideal world, this would be pretty straightforward, but in reality VCOs and
    
 It appears that the WiFi based solution is the least bad one. 
 
+A completely different approach is the [Fishman TriplePlay Bridge Wireless MIDI Pickup](https://www.fishman.com/portfolio/tripleplay-wireless-midi-guitar-controller/). As the name suggests, this part transmits MIDI data over wireless which is far easier than audio due to the much lower amount of data. Basically, this part presumably has an audio-to-MIDI pitch and dynamics converter on board, and it does not interface to Roland's GK synth series. 
+
+# Copyright and Licensing
+
+The material in this git repository is copyrighted by me and licensed to you by the [GNU General Public License V3](https://www.gnu.org/licenses/gpl-3.0.en.html). Commercial use without written permission is strictly forbidden. If you are interested, feel free to ask for a commercial license. 
+
+

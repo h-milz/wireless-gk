@@ -113,3 +113,8 @@ Add this to the 1.36 ms for 60 frame ADC plus 22.7 µs until the first sample ar
 
  * ordered two ESP32-C6 DevKits, a TI PCM1808 ADC and a TI PCM5102 DAC breakout board each.
 
+
+# Copyright and Licensing
+
+The material in this git repository is copyrighted by me and licensed to you by the [GNU General Public License V3](https://www.gnu.org/licenses/gpl-3.0.en.html). Commercial use without written permission is strictly forbidden. If you are interested, feel free to ask for a commercial license. 
+

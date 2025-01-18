@@ -36,6 +36,10 @@ WPS may not be the bleeding edge way of proliferating the WiFi SSID and password
  * SmartConfig requires a third party Android (or iOS?) app (of which I can't know how well security is implemented, and I do not want to rely on third party tools) --  and again: the QR code. 
  * Using a separate channel like Bluetooth or ESP-NOW requires writing own (security relevant) code, and getting that to securely work and rule out vulnerabilities can be a nightmare. Both ways also require pairing using a password first, which means it's a classical chicken-and-egg thing. 
 
+# Copyright and Licensing
+
+The material in this git repository is copyrighted by me and licensed to you by the [GNU General Public License V3](https://www.gnu.org/licenses/gpl-3.0.en.html). Commercial use without written permission is strictly forbidden. If you are interested, feel free to ask for a commercial license. 
+
 
 
 

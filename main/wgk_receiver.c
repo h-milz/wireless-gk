@@ -457,11 +457,11 @@ void udp_rx_task(void *args) {
                 // otherwise, the previous successful datagram will be used. 
                 last_udp_buf = udpbuf[k];
                 mycount = (mycount + 1) & 0xFFFFFF;
-                memcpy (&count, 
-                        (uint32_t *)(last_udp_buf + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP),
-                        sizeof(uint32_t));
                 // display once a second
                 if (mycount % PACKETS_PER_SECOND == 0) {
+                    memcpy (&count, 
+                            (uint32_t *)(last_udp_buf + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP),
+                            sizeof(uint32_t));
                     ESP_LOGI(RX_TAG, "count %lu, my_count %lu, diff %d", count, mycount, (int)count - (int)mycount); 
                 }
             } else if (len == -1) {

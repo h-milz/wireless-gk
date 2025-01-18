@@ -276,8 +276,12 @@ void i2s_rx_task(void *args) {
             }                    
         }
 #endif
-        // count the first sample
-        // memcpy((uint32_t *)udpbuf[0], &loops, 4);
+        // insert current packet count into the last slot. 
+        count++; 
+        memcpy ((uint32_t *)udpbuf[0] + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP, 
+                &count,
+                sizeof(uint32_t)); 
+
 
 #ifdef TX_DEBUG        
         _log[p].loc = 5;

@@ -232,7 +232,9 @@ void i2s_rx_task(void *args) {
     uint32_t loops = 0, led = 0x00;
     uint32_t evt_p;
     dma_params_t *dma_params;
-    uint32_t nsamples = NFRAMES; // default
+    uint32_t count = 0; 
+
+
     
 #ifdef TX_DEBUG
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
@@ -348,7 +350,7 @@ static heap_trace_record_t trace_record[NUM_RECORDS];
 void udp_tx_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
-    int buf_size = 40960;  // UDP buffer size - adjust!
+
     int err; 
 
     dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);

@@ -278,7 +278,7 @@ void i2s_rx_task(void *args) {
 #endif
         // insert current packet count into the last slot. only 24 least significant bits
         count = (count + 1) & 0x00FFFFFF; 
-        memcpy ((uint32_t *)udpbuf[0] + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP, 
+        memcpy ((uint32_t *)(udpbuf[0] + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP), 
                 &count,
                 sizeof(uint32_t)); 
 

@@ -388,10 +388,12 @@ void i2s_tx_task(void *args) {
 // udp_rx_task receives packets as they arrive, and puts them in udpbuf
 // we use multiple udpbufs as a ring buffer to avoid race conditions and lost packets
 #define NUM_UDP_BUFS_M_1 (NUM_UDP_BUFS - 1)
+#define PACKETS_PER_SECOND (SAMPLE_RATE / NFRAMES)
 void udp_rx_task(void *args) {
 
     int i, j;
     int k = 0;          // udpbuf ring buffer index
+    uint32_t count, mycount = 0; 
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
     struct sockaddr_in dest_addr;
@@ -454,6 +456,14 @@ void udp_rx_task(void *args) {
                 // assume success. we copy the buffer pointer to last_udp_buf
                 // otherwise, the previous successful datagram will be used. 
                 last_udp_buf = udpbuf[k];
+                mycount = (mycount + 1) & 0xFFFFFF;
+                memcpy (&count, 
+                        (uint32_t *)(last_udp_buf + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP),
+                        sizeof(uint32_t));
+                // display once a second
+                if (mycount % PACKETS_PER_SECOND == 0) {
+                    ESP_LOGI(RX_TAG, "count %lu, my_count %lu, diff %d", count, mycount, (int)count - (int)mycount); 
+                }
             } else if (len == -1) {
                 // we ignore broken packets for now. 
                 ESP_LOGW(RX_TAG, "broken / lost packet");

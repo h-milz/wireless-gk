@@ -233,6 +233,8 @@ void i2s_rx_task(void *args) {
     uint32_t evt_p;
     dma_params_t *dma_params;
     uint32_t count = 0; 
+    uint8_t checksum; 
+    uint32_t num_bytes = UDP_BUF_SIZE - 2 * NUM_SLOTS_UDP * SLOT_SIZE_UDP;
 
 
     
@@ -278,9 +280,17 @@ void i2s_rx_task(void *args) {
 #endif
         // insert current packet count into the last slot. only 24 least significant bits
         count = (count + 1) & 0x00FFFFFF; 
-        memcpy ((uint32_t *)(udpbuf[0] + (NUM_SLOTS_UDP-1) * SLOT_SIZE_UDP), 
+        memcpy ((uint32_t *)(udpbuf[0] + UDP_BUF_SIZE - 3 ),      
                 &count,
-                sizeof(uint32_t)); 
+                3); 
+                
+        // insert XOR checksum 
+        // into second byte of the last slot
+        checksum = 0; 
+        for (i = 0; i < num_bytes; i++) {
+            checksum ^= udpbuf[0][i];
+        }
+        udpbuf[0][UDP_BUF_SIZE - 27] = checksum;    // one slot before. 
 
 
 #ifdef TX_DEBUG        
@@ -388,7 +398,7 @@ void udp_tx_task(void *args) {
             // ESP_LOGI(TX_TAG, "err=%d errno=%d", err, errno);
             if (err < 0) {
         	    if (errno == ENOMEM) {
-        	        ESP_LOGW(TX_TAG, "lwip_sendto fail. %d", errno);
+        	        ESP_LOGW(TX_TAG, "lwip_sendto fail ENOMEM. %d", errno);
         	        vTaskDelay(10);
         	    } else if (errno == 118) {
         	        ESP_LOGE(TX_TAG, "network not connected, errno %d", errno);

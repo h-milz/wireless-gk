@@ -22,7 +22,7 @@
 #define LED_PIN                 GPIO_NUM_10             // 
 #define SETUP_PIN               GPIO_NUM_14             // take the one that is nearest to the push button
 #define SIG_PIN                 GPIO_NUM_8
-#define ISR_PIN                GPIO_NUM_9
+#define ISR_PIN                 GPIO_NUM_9
 
 
 static const char *TX_TAG = "wgk_tx";

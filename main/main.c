@@ -135,9 +135,9 @@ void app_main(void) {
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
-        // create udp buffers
+        // create udp buffers explicitly in RAM
         // we use only one in the sender. 
-        udpbuf[0] = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t)); 
+        udpbuf[0] = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
@@ -189,9 +189,9 @@ void app_main(void) {
         // let it settle. 
         vTaskDelay(100/portTICK_PERIOD_MS);
         
-        // create udp buffers
+        // create udp buffers explicitly in DRAM
         for (int n=0; n<NUM_UDP_BUFS; n++) {
-            udpbuf[n] = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t)); 
+            udpbuf[n] = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         }
                 
         // set up I2S send channel on the Receiver
@@ -229,9 +229,9 @@ void app_main(void) {
     
     // we should never end up here. 
     // vTaskDelete(NULL);
-    while (1) {
-        vTaskDelay(500/portTICK_PERIOD_MS);
-    }
+    // while (1) {
+    //     vTaskDelay(500/portTICK_PERIOD_MS);
+    // }
 }
 
 

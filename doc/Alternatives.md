@@ -11,7 +11,9 @@ What troubles me about all of these concepts is that we convert the guitar and G
  
 A rather theoretical variant would be a purely analog one: **analog frequency multiplex**. For each of the 7 analog signals, you create an FM signal in the range between, say, 500 kHz and 4 MHz, add up the 7 resulting signals, feed the resulting frequency mix into your ISM video transmitter, and you are done, sender-side. On the receiver, demodulate using the same center frequencies, restoring the original audio signals. 
 
-In an ideal world, this would be pretty straightforward, but in reality mixers, VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. FPV gadgets aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is occasionally slightly distorted or something. And we haven't even talked about the signal/noise ratio for the modulation / demodulation. The other issue is that the signal is not protected against jamming at all. And it would probably sound like a cheap FM radio. It's for a reason why professional audio transmitter solutions from Sennheiser et al. are so darn expensive, and everyone goes digital now.
+In an ideal world, this would be pretty straightforward, but in reality mixers, VCOs and PLLs are not linear over a larger bandwidth, and the cheap ISM video transceivers e.g. for FPV aren't linear either because they are designed for a completely different use case where is does not matter much if a video stream is occasionally slightly distorted or something. And we haven't even talked about the signal/noise ratio for the modulation / demodulation. To add insult to injury, the RF latency of typical analog FPV systems in the 5.8 GHz band is in the range of 10..30 ms and higher for digital systems. 
+
+The other issue is that the signal is not protected against jamming at all. 
    
 It appears that the WiFi based solution is the least bad one. 
 

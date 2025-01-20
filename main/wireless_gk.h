@@ -140,7 +140,7 @@ extern uint8_t *udpbuf[];
 static i2s_chan_config_t i2s_tx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
-    .dma_desc_num = 8, // NUM_DMA_BUFS,
+    .dma_desc_num = NUM_DMA_BUFS,    // TODO Stellschraube
     .dma_frame_num = NFRAMES, 
     .auto_clear_after_cb = true,     // we don't need to do that ourselves. 
     .auto_clear_before_cb = false, 

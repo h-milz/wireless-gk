@@ -1,8 +1,12 @@
 # Progress 
 
+2025-01-20
+
+ * sample interpolation and circular buffer experiments
+
 2025-01-16
 
- * live streaming between sender and receiver now. Listening to music, bridged between my smartphone and my hi-fi amp. Basically, this combo is now a generic wireless 8-channel 24/44 audio bridge. 48 kHz should work as well. 
+ * live streaming between sender and receiver now. Listening to music, bridged between my smartphone and my hi-fi amp. Basically, this combo is now a generic wireless 8-channel 24/44 audio bridge. 48 kHz should work as well. Still, there are glitches. 
 
 2025-01-14
 

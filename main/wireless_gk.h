@@ -92,6 +92,10 @@
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_UDP_BUFS            4                       // must be a power of 2 due to the way the buffer index is incremented
+#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 5        // 5 = 4 bytes for XOR checksum + 1 byte S1, S2
+
+#define NUM_I2S_BUFS            4 
+#define I2S_CBUF_SIZE           DMA_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size
 
 #define I2S_NUM                 I2S_NUM_AUTO
 #define SAMPLE_RATE             44100                   // 44100

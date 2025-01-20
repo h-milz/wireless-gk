@@ -152,10 +152,10 @@ void app_main(void) {
         xTaskCreate(latency_meas_task, "latency_meas_task", 4096, NULL, 5, NULL);
 #else        
         // create I2S Rx task
-        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 4, &i2s_rx_task_handle);
+        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
     
         // create UDP Tx task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 5, &udp_tx_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 15, &udp_tx_task_handle);
 
         // xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 
@@ -207,10 +207,10 @@ void app_main(void) {
         // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
         // Dann braucht man da auch nicht zu pollen. 
         
-        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 5, &udp_rx_task_handle);
+        xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 18, &udp_rx_task_handle);
 
         // create I2S Tx task
-        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 4, &i2s_tx_task_handle);
+        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 15, &i2s_tx_task_handle);
     
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 

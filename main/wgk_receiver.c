@@ -425,7 +425,7 @@ void udp_rx_task(void *args) {
     timeout.tv_usec = 0;
 
     // initialize circular buffer
-    cbuf_handle_t cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS, sizeof(uint8_t *)); 
+    cbuf_handle_t cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS , UDP_BUF_SIZE * sizeof(uint8_t *)); 
     
     while (1) {
 

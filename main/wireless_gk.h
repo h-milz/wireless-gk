@@ -46,6 +46,7 @@
 #include "lwip/sys.h"
 #include "lwip/errno.h"
 
+
 // TODO remove for production compilation 
 #pragma GCC diagnostic ignored "-Wunused-variable"
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
@@ -242,7 +243,7 @@ static i2s_tdm_config_t i2s_tx_cfg = {
 /* ***************************************************************
  * UDP stuff 
  * ***************************************************************/
-extern uint8_t *udpbuf;
+extern uint8_t *udpbuf, *recvbuf;
 
 
 /* ***************************************************************
@@ -281,6 +282,7 @@ typedef struct {
 */
 
 uint32_t get_time_us_in_isr(void);
+uint32_t calculate_checksum(uint32_t *buffer, size_t size); 
 
 #define NEOPIX_PIN GPIO_NUM_27              // for the DevKit-C
 #ifndef MIN

@@ -36,10 +36,9 @@ void circular_buf_reset(cbuf_handle_t me);
 bool circular_buf_empty(cbuf_handle_t me); 
 bool circular_buf_full(cbuf_handle_t me); 
 cbuf_handle_t circular_buf_init(uint8_t *buffer, size_t size, size_t elem_size);
-static void advance_pointer(cbuf_handle_t me); 
-static void retreat_pointer(cbuf_handle_t me); 
 void circular_buf_put(cbuf_handle_t me, uint8_t *data); 
-size_t circular_buf_get(cbuf_handle_t me, uint8_t **data); 
+// size_t circular_buf_get(cbuf_handle_t me, uint8_t **data); 
+uint8_t * circular_buf_get(cbuf_handle_t me);
 
 #endif // CBUF_H 
 

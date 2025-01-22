@@ -64,31 +64,6 @@ cbuf_handle_t circular_buf_init(uint8_t *buffer, size_t size, size_t elem_size) 
 }
 
 
-// do we need this? 
-/*
-size_t circular_buf_capacity(cbuf_handle_t me) {
-	assert(me);
-
-	return me->max;
-}
-
-size_t circular_buf_size(cbuf_handle_t me) {
-	assert(me);
-
-	size_t size = me->max;
-
-	if(!me->full) {
-		if(me->head >= me->tail) {
-			size = (me->head - me->tail);
-		} else {
-			size = (me->max + me->head - me->tail);
-		}
-	}
-
-	return size;
-}
-*/
-
 static void advance_pointer(cbuf_handle_t me) {
 	assert(me);
 
@@ -127,22 +102,24 @@ void circular_buf_put(cbuf_handle_t me, uint8_t *data) {
 }
 
 
-size_t circular_buf_get(cbuf_handle_t me, uint8_t **data) {
-    assert(me && data && me->buffer);
+// size_t circular_buf_get(cbuf_handle_t me, uint8_t **data) {
+//     assert(me && data && me->buffer);
 
-    // we return the number of bytes retrieved
-    size_t r = 0;
+uint8_t * circular_buf_get(cbuf_handle_t me) {
+    assert(me && me->buffer);
+    
+    uint8_t *data = NULL; 
 
     if(!circular_buf_empty(me)) {
         // to save two extra memcpys, we return only the pointer to the buffer tail
         // memcpy(data, me->buffer + (me->tail * me->elem_size), me->elem_size); 
         // i2s_tx_callback will then unpack directly using the pointer
-        *data = me->buffer + (me->tail * me->elem_size); 
+        data = me->buffer + (me->tail * me->elem_size); 
         retreat_pointer(me);
 
-        r = me->elem_size;
+        // r = me->elem_size;
     }
 
-    return r;
+    return data;
 }
 

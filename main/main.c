@@ -27,7 +27,7 @@ EventGroupHandle_t s_wifi_event_group;
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-uint8_t *udpbuf;
+uint8_t *udpbuf, *recvbuf;
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 
@@ -89,6 +89,20 @@ void monitor_task(void *args) {
         vTaskDelay (1000/portTICK_PERIOD_MS);
     }
 }
+
+
+// calculate simple XOR checksum based on uint32_t, which is much faster than using uint8_t
+// there are 4x less XOR operations
+// and ESP32 does not support unaligned uint8_t accesses and will always generate an exception
+uint32_t calculate_checksum(uint32_t *buffer, size_t size) {
+    uint32_t checksum = 0;
+
+    for (i = 0; i < size; i++) {  
+        checksum ^= buffer + i;
+    }
+    return checksum; 
+}
+
 
 
 void app_main(void) {
@@ -191,7 +205,9 @@ void app_main(void) {
         
         // create udp ring buffer explicitly in DRAM
         udpbuf = (uint8_t *)heap_caps_calloc(NUM_UDP_BUFS * UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
-        
+        // and the UDP receive buffer
+        recvbuf = (uint8_t *)heap_caps_calloc(UDP_PAYLOAD_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+            
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);
         // this will later be i2s_channel_init_tdm_mode(). 

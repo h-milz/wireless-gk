@@ -137,7 +137,7 @@ extern EventGroupHandle_t s_wifi_event_group;
 void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
 
 // UDP buffers
-extern uint8_t *udpbuf[];
+extern uint8_t *udpbuf;
 
 // I2S stuff
 // The channel config is similar for both. 

@@ -242,7 +242,7 @@ void i2s_rx_task(void *args) {
     char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
 #endif
 
-    memset(udpbuf[0], 0, UDP_BUF_SIZE);    
+    memset(udpbuf, 0, UDP_BUF_SIZE);    
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
 #ifdef TX_DEBUG
@@ -265,14 +265,14 @@ void i2s_rx_task(void *args) {
 #endif
         // read DMA buffer and pack
 #ifndef TX_TEST
-        memcpy (udpbuf[0], dmabuf, size);         
+        memcpy (udpbuf, dmabuf, size);         
 #else        
-        // memset (udpbuf[0], 0, UDP_BUF_SIZE);         // clean up first
+        // memset (udpbuf, 0, UDP_BUF_SIZE);         // clean up first
         for (i=0; i<NFRAMES; i++) {
             for (j=0; j<NUM_SLOTS_I2S; j++) {                
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                memcpy (udpbuf[0] + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                         dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
                         SLOT_SIZE_UDP);
             }                    
@@ -280,7 +280,7 @@ void i2s_rx_task(void *args) {
 #endif
         // insert current packet count into the last slot. only 24 least significant bits
         count = (count + 1) & 0x00FFFFFF; 
-        memcpy ((uint32_t *)(udpbuf[0] + UDP_BUF_SIZE - 3 ),      
+        memcpy ((uint32_t *)(udpbuf + UDP_BUF_SIZE - 3 ),      
                 &count,
                 3); 
                 
@@ -288,9 +288,9 @@ void i2s_rx_task(void *args) {
         // into second byte of the last slot
         checksum = 0; 
         for (i = 0; i < num_bytes; i++) {
-            checksum ^= udpbuf[0][i];
+            checksum ^= udpbuf[i];
         }
-        udpbuf[0][UDP_BUF_SIZE - 27] = checksum;    // one slot before. 
+        udpbuf[UDP_BUF_SIZE - 27] = checksum;    // one slot before. 
 
 
 #ifdef TX_DEBUG        
@@ -394,7 +394,7 @@ void udp_tx_task(void *args) {
 
             xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY);
             
-            err = sendto(sock, udpbuf[0], UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udpbuf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             // ESP_LOGI(TX_TAG, "err=%d errno=%d", err, errno);
             if (err < 0) {
         	    if (errno == ENOMEM) {
@@ -453,12 +453,12 @@ void latency_meas_task(void *args) {
 
     ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
 
-    memset (udpbuf[0], 0xaa, UDP_BUF_SIZE);         // fake data
+    memset (udpbuf, 0xaa, UDP_BUF_SIZE);         // fake data
 
     while (1) {
         gpio_set_level(SIG_PIN, 1);    
 
-        err = sendto(sock, udpbuf[0], UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        err = sendto(sock, udpbuf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         
         ESP_LOGI (TX_TAG, "latency packet sent");
 

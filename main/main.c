@@ -27,7 +27,7 @@ EventGroupHandle_t s_wifi_event_group;
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-uint8_t *udpbuf[NUM_UDP_BUFS];
+uint8_t *udpbuf;
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 
@@ -95,7 +95,7 @@ void app_main(void) {
 
     bool sender = false; 
     bool creds_available = false;
-    bool setup_needed = false;
+    bool setup_requested = false;
     
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -122,22 +122,22 @@ void app_main(void) {
     if (sender) {
         // initialize GPIO pins
         // returns true if setup was pressed
-        setup_needed = init_gpio_tx();
-        if (setup_needed) {   // setup needed
+        setup_requested = init_gpio_tx();
+        if (setup_requested) {   // setup needed
             ESP_ERROR_CHECK(nvs_flash_erase());
             nvs_flash_init();
             ESP_LOGI(TAG, "setup requested, entering setup mode");
         }
     
         // initialize Wifi STA
-        init_wifi_tx(setup_needed);
+        init_wifi_tx(setup_requested);
         
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
         // create udp buffers explicitly in RAM
         // we use only one in the sender. 
-        udpbuf[0] = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+        udpbuf = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
@@ -175,8 +175,8 @@ void app_main(void) {
     } else {   // receiver
         // initialize GPIO pins
         // returns true if setup was pressed
-        setup_needed = init_gpio_rx();
-        if (setup_needed) {   // setup needed
+        setup_requested = init_gpio_rx();
+        if (setup_requested) {   // setup needed
             ESP_ERROR_CHECK(nvs_flash_erase());
             nvs_flash_init();
             ESP_LOGI(TAG, "setup requested, entering setup mode");
@@ -185,15 +185,13 @@ void app_main(void) {
         // TODO check if we had WiFi credentials in NVS, if not, setup. 
     
         // initialize Wifi AP
-        init_wifi_rx(setup_needed);
+        init_wifi_rx(setup_requested);
         // let it settle. 
-        vTaskDelay(100/portTICK_PERIOD_MS);
+        vTaskDelay(200/portTICK_PERIOD_MS);
         
-        // create udp buffers explicitly in DRAM
-        for (int n=0; n<NUM_UDP_BUFS; n++) {
-            udpbuf[n] = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
-        }
-                
+        // create udp ring buffer explicitly in DRAM
+        udpbuf = (uint8_t *)heap_caps_calloc(NUM_UDP_BUFS * UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);
         // this will later be i2s_channel_init_tdm_mode(). 
@@ -204,14 +202,8 @@ void app_main(void) {
 #endif               
 
         // create UDP Rx task
-        // hier könnte man die Steuerung über den on_sent callback machen. Wenn ein Buf geschickt ist, hole neues UDP-Paket. 
-        // Dann braucht man da auch nicht zu pollen. 
-        
         xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 18, &udp_rx_task_handle);
 
-        // create I2S Tx task
-        xTaskCreate(i2s_tx_task, "i2s_tx_task", 4096, NULL, 15, &i2s_tx_task_handle);
-    
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 
         // create I2S tx on_sent callback
@@ -224,14 +216,7 @@ void app_main(void) {
         i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
-        
     }
-    
-    // we should never end up here. 
-    // vTaskDelete(NULL);
-    // while (1) {
-    //     vTaskDelay(500/portTICK_PERIOD_MS);
-    // }
 }
 
 

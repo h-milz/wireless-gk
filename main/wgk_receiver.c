@@ -18,6 +18,7 @@
 */
 
 #include "wireless_gk.h"
+#include "cbuf.h"
 
 #define LED_PIN                 GPIO_NUM_10             // 
 #define SETUP_PIN               GPIO_NUM_14             // take the one that is nearest to the push button
@@ -36,9 +37,8 @@ TaskHandle_t udp_rx_task_handle = NULL;
 
 static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
 
-// uint8_t i2sbuf[SLOT_SIZE_I2S * NUM_SLOTS_I2S * NFRAMES];
-// pointer to the last successfully received UDP datagram
-static uint8_t *last_udp_buf = NULL; 
+// static receive buffer
+// static uint8_t recvbuf[UDP_PAYLOAD_SIZE]; 
 
 #ifdef RX_DEBUG
 static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", "before recvfrom", "after recvfrom", "end i2s_tx loop" }; 
@@ -261,13 +261,16 @@ void init_wifi_rx(bool setup_requested) {
 
 
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
-IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
-    BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-    
+IRAM_ATTR void i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
+    // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+    uint8_t *i2sbuf, *dmabuf;
+    size_t res; // , size;
+        
     // we pass the *dma_buf and size in a struct, by reference. 
-    static dma_params_t dma_params;
-    dma_params.dma_buf = (uint8_t *)event->dma_buf;
-    dma_params.size = (uint32_t)event->size;
+    // static dma_params_t dma_params;
+    // dma_params.dma_buf = (uint8_t *)event->dma_buf;
+    dmabuf = (uint8_t *)event->dma_buf;
+    // size = event->size;    // unused so far
 #ifdef RX_DEBUG
     _log[p].loc = 0;
     _log[p].time = get_time_us_in_isr();
@@ -275,11 +278,26 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     _log[p].size = event->size; 
     p++;
 #endif
-    xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-    return (xHigherPriorityTaskWoken == pdTRUE);
+    // fetch cbuf tail pointer
+    res = circular_buf_get(cbuf, &i2sbuf);
+    // unpack and write to most recent free dma buffer
+    // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
+    for (i=0; i<NFRAMES; i++) {
+        for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
+            // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
+            // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+             memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
+                     i2sbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                     SLOT_SIZE_UDP); 
+        }
+    }
+
+
+    // xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+    // return (xHigherPriorityTaskWoken == pdTRUE);
 }    
 
-
+#if 0
 void i2s_tx_task(void *args) {
     int i, j;
     uint32_t size;
@@ -383,32 +401,31 @@ void i2s_tx_task(void *args) {
 #endif    
     }    
 }
+#endif // i2s_tx_task 
 
 
-// udp_rx_task receives packets as they arrive, and puts them in udpbuf
-// we use multiple udpbufs as a ring buffer to avoid race conditions and lost packets
-#define NUM_UDP_BUFS_M_1 (NUM_UDP_BUFS - 1)
+// udp_rx_task receives packets as they arrive, and puts them in the ring buffer
 #define PACKETS_PER_SECOND (SAMPLE_RATE / NFRAMES)
 void udp_rx_task(void *args) {
 
     int i, j;
-    int k = 0;          // udpbuf ring buffer index
     uint32_t count, mycount = 0; 
-    uint8_t checksum = 0, mychecksum = 0; 
-    uint32_t num_bytes = UDP_BUF_SIZE - 2 * NUM_SLOTS_UDP * SLOT_SIZE_UDP;
+    uint32_t checksum, mychecksum; 
+
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
     struct sockaddr_in dest_addr;
     struct timeval timeout;
     
-    dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR); // htonl(INADDR_ANY);
+    dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR); 
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(PORT);
 
     timeout.tv_sec = 1;       // 1 second timeout is plenty! 
     timeout.tv_usec = 0;
 
-    last_udp_buf = udpbuf[0];    // in order to initialize a valid pointer address. 
+    // initialize circular buffer
+    cbuf_handle_t cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS, sizeof(uint8_t *)); 
     
     while (1) {
 
@@ -424,21 +441,19 @@ void udp_rx_task(void *args) {
         int err = bind(sock, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         if (err < 0) {
             ESP_LOGE(RX_TAG, "Socket unable to bind: errno %d", errno);
+            // blink socket error
+            vTaskDelete(NULL); 
         }
         ESP_LOGI(RX_TAG, "Socket bound, port %d", PORT);
 
         while(1) {
 
-            // k = (k+1) % NUM_UDP_BUFS; 
-            // k = (k+1) >= NUM_UDP_BUFS ? 0 : k+1; // this way, we must add 1 twice. but it's faster than modulo division
-            // this is the fastest variant if the number of buffers is a power of 2: 
-            k = (k+1) & NUM_UDP_BUFS_M_1;
 #ifdef RX_DEBUG        
             _log[p].loc = 4;
             _log[p].time = get_time_us_in_isr(); 
             p++;
 #endif
-            int len = recvfrom(sock, udpbuf[k], UDP_BUF_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(sock, recvbuf, UDP_PAYLOAD_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
             ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
@@ -451,13 +466,25 @@ void udp_rx_task(void *args) {
             p++;
 #endif
 
-            // TODO checksum? should be checked in udp_rx_task, and leave last_udp_buf unchanged if checksum err. 
+            // TODO checksum? should be checked in udp_rx_task, and put nothing in ring buffer if err.
             // is a 8 bit XOR checksum enough?
+            // The checksum will be at (uint32_t)UDP_BUF_SIZE
+            // S1 S2 will be at (uint32_t)UDP_PAYLOAD_SIZE-1 , i.e. the last byte
                     
-            if (len == UDP_BUF_SIZE) {
-                // assume success. we copy the buffer pointer to last_udp_buf
-                // otherwise, the previous successful datagram will be used. 
-                last_udp_buf = udpbuf[k];
+            if (len == UDP_PAYLOAD_SIZE) {
+                // assume success. check checksum based on uint32_t
+                checksum = (uint32_t *)recvbuf[UDP_BUF_SIZE/4];                
+                mychecksum = calculate_checksum((uint32_t *)recvbuf, UDP_BUF_SIZE/4); 
+                if (checksum == mychecksum) {
+                    circular_buf_put(cbuf, recvbuf);            // will only copy elem_size bytes, i.e. ignore checksum and switches
+                } else {
+                    ESP_LOGW(RX_TAG, "packet checksum err"); 
+                }
+                
+                // TODO extract S1, S2 to global var. 
+                
+                
+#ifdef COUNT_PACKAGES
                 mycount = (mycount + 1) & 0x00FFFFFF;   // 24 bit only
                 // display once a second
                 if (mycount % PACKETS_PER_SECOND == 0) {
@@ -465,17 +492,8 @@ void udp_rx_task(void *args) {
                             (uint32_t *)(last_udp_buf + UDP_BUF_SIZE - 3),
                             3);
                     ESP_LOGI(RX_TAG, "count %lu, my_count %lu, diff %d", count, mycount, (int)count - (int)mycount); 
-                    // calculate and compare checksum
-                    mychecksum = 0; 
-                    for (i = 0; i < num_bytes; i++) {
-                        mychecksum ^= last_udp_buf[i];
-                    }
-                    checksum = last_udp_buf[UDP_BUF_SIZE - 27];
-                    if (checksum != mychecksum) {
-                        ESP_LOGW(RX_TAG, "packet checksum err"); 
-                    }
-                    
                 }
+#endif                
             } else if (len == -1) {
                 // we ignore broken packets for now. 
                 ESP_LOGW(RX_TAG, "broken / lost packet");

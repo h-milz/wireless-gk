@@ -45,6 +45,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "lwip/errno.h"
+#include "cbuf.h" 
 
 
 // TODO remove for production compilation 
@@ -52,7 +53,7 @@
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 
-// #define TX_DEBUG
+#define TX_DEBUG
 // #define RX_DEBUG
 // #define LATENCY_MEAS                 // activate this if you want to do a UDP latency measurement. 
                                         // Connect Tx SIG_PIN to Rx ISR_PIN and GND to GND. 
@@ -272,14 +273,14 @@ bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *us
 void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
 int find_free_channel(void);
+static cbuf_handle_t cbuf; 
 
 // main stuff
-/*
 typedef struct { 
     uint8_t *dma_buf;       // pointer to buffer
     uint32_t size;        // data size
 } dma_params_t; 
-*/
+
 
 uint32_t get_time_us_in_isr(void);
 uint32_t calculate_checksum(uint32_t *buffer, size_t size); 

@@ -40,6 +40,8 @@ static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
 // static receive buffer
 // static uint8_t recvbuf[UDP_PAYLOAD_SIZE]; 
 
+DRAM_ATTR static cbuf_handle_t cbuf; 
+
 #ifdef RX_DEBUG
 static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", "before recvfrom", "after recvfrom", "end i2s_tx loop" }; 
 #endif
@@ -261,10 +263,10 @@ void init_wifi_rx(bool setup_requested) {
 
 
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
-IRAM_ATTR void i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
-    // BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     uint8_t *i2sbuf, *dmabuf;
     size_t res; // , size;
+    int i, j; 
         
     // we pass the *dma_buf and size in a struct, by reference. 
     // static dma_params_t dma_params;
@@ -279,7 +281,8 @@ IRAM_ATTR void i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     p++;
 #endif
     // fetch cbuf tail pointer
-    res = circular_buf_get(cbuf, &i2sbuf);
+    i2sbuf = circular_buf_get(cbuf); 
+    if (i2sbuf == NULL) return false;      // this will be the case right after start, when the cbuf is still empty
     // unpack and write to most recent free dma buffer
     // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
     for (i=0; i<NFRAMES; i++) {
@@ -291,125 +294,15 @@ IRAM_ATTR void i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
                      SLOT_SIZE_UDP); 
         }
     }
-
-
-    // xTaskNotifyFromISR(i2s_tx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
-    // return (xHigherPriorityTaskWoken == pdTRUE);
+    return false; 
 }    
-
-#if 0
-void i2s_tx_task(void *args) {
-    int i, j;
-    uint32_t size;
-    uint8_t *dmabuf;
-    uint32_t loops = 0, led = 0;
-    uint32_t evt_p;
-    dma_params_t *dma_params;
-    uint32_t nsamples = NFRAMES; // default
-    
-    // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
-    while(1) {     
-#ifdef RX_DEBUG
-        _log[p].loc = 1;
-        _log[p].time = get_time_us_in_isr();
-        p++;
-#endif    
-        // here we wait for the notify from the on_sent callback
-        xTaskNotifyWait(0, ULONG_MAX, &evt_p, portMAX_DELAY);
-        // convert back to pointer
-        dma_params = (dma_params_t *)evt_p;    
-        // and fetch pointer and size
-        dmabuf = dma_params->dma_buf;
-        size = dma_params->size;
-        if (last_udp_buf == NULL) {
-            ESP_LOGW(RX_TAG, "last_udp_buf = 0x%08lx", (uint32_t)last_udp_buf); 
-            continue;  // can happen during the very first loop(s).         
-        }
-        
-#ifdef RX_DEBUG        
-        _log[p].loc = 2;
-        _log[p].time = get_time_us_in_isr();
-        _log[p].ptr = dmabuf;
-        _log[p].size = size;
-        p++;
-#endif
-        
-        // checksum? should be checked in udp_rx_task, and leave last_udp_buf unchanged if checksum err. 
-        
-        // extract S1, S2
-        // can be handled by a separate task running every, say, 10 ms. 
-
-        // unpack and write to most recent free dma buffer
-        // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
-        for (i=0; i<NFRAMES; i++) {
-            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
-                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                 memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                         last_udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                         SLOT_SIZE_UDP); 
-            }
-        }
-#ifdef LATENCY_MEAS        
-        stop_time = get_time_us_in_isr();
-#endif        
-        
-#ifdef RX_DEBUG        
-        _log[p].loc = 3;
-        _log[p].time = get_time_us_in_isr(); 
-        _log[p].ptr = dmabuf;
-        _log[p].size = size;
-        p++;
-#endif    
-        
-            
-        // ESP_LOGI(RX_TAG, "p = %d", p);
-#ifdef RX_DEBUG
-        if (p >= NUM) {
-            i2s_channel_disable(i2s_tx_handle); // also stop all interrupts
-            int q; 
-            uint32_t curr_time, prev_time=0;
-            for (q=0; q<p; q++) {
-                switch (_log[q].loc) {
-                    case 1:         // ISR
-                        curr_time = _log[q].time;
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, 
-                                curr_time - prev_time,
-                                (uint32_t) _log[q].ptr, _log[q].size);
-                        prev_time = curr_time;
-                        break; 
-                    default:
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
-                        break;
-                }                        
-            }
-            vTaskDelete(NULL); 
-        }
-#endif
-        // blink LED
-        loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
-        if (loops == 0) {
-            led = (led + 1) % 2;
-            gpio_set_level(LED_PIN, led);
-        }        
-#ifdef RX_DEBUG        
-        _log[p].loc = 6;
-        _log[p].time = get_time_us_in_isr(); 
-        p++;
-#endif    
-    }    
-}
-#endif // i2s_tx_task 
-
 
 // udp_rx_task receives packets as they arrive, and puts them in the ring buffer
 #define PACKETS_PER_SECOND (SAMPLE_RATE / NFRAMES)
 void udp_rx_task(void *args) {
 
     int i, j;
-    uint32_t count, mycount = 0; 
+    uint32_t count = 0, mycount = 0; 
     uint32_t checksum, mychecksum; 
 
     struct sockaddr_storage source_addr;
@@ -425,7 +318,7 @@ void udp_rx_task(void *args) {
     timeout.tv_usec = 0;
 
     // initialize circular buffer
-    cbuf_handle_t cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS , UDP_BUF_SIZE * sizeof(uint8_t *)); 
+    cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS, UDP_BUF_SIZE * sizeof(uint8_t *)); 
     
     while (1) {
 
@@ -473,7 +366,7 @@ void udp_rx_task(void *args) {
                     
             if (len == UDP_PAYLOAD_SIZE) {
                 // assume success. check checksum based on uint32_t
-                checksum = (uint32_t *)recvbuf[UDP_BUF_SIZE/4];                
+                memcpy (&checksum, recvbuf + UDP_BUF_SIZE, sizeof(checksum)); 
                 mychecksum = calculate_checksum((uint32_t *)recvbuf, UDP_BUF_SIZE/4); 
                 if (checksum == mychecksum) {
                     circular_buf_put(cbuf, recvbuf);            // will only copy elem_size bytes, i.e. ignore checksum and switches
@@ -482,6 +375,8 @@ void udp_rx_task(void *args) {
                 }
                 
                 // TODO extract S1, S2 to global var. 
+        	    count = (count + 1) & 0x03ff; // 1024
+        	    if (count == 0) printf ("."); 
                 
                 
 #ifdef COUNT_PACKAGES

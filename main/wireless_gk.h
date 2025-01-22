@@ -85,9 +85,9 @@
 #define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
 #define SLOT_SIZE_UDP           3                       // UDP has 3-byte samples.
 #define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // 
-#define NUM_DMA_BUFS            4                       // Number of DMA buffers. 
-                                                        // 4 is enough because we pick up each individual one
-                                                        // for sending we only use 2. 
+#define NUM_RX_DMA_BUFS         4                       // Number of DMA buffers in the sender.  RX is here I2S RX
+#define NUM_TX_DMA_BUFS         2                       // the receiver only uses 2. TX is here I2S TX
+
 #define DMA_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each DMA buffer
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
@@ -140,22 +140,12 @@ void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, voi
 extern uint8_t *udpbuf;
 
 // I2S stuff
-// The channel config is similar for both. 
-static i2s_chan_config_t i2s_tx_chan_cfg = {
-    .id = I2S_NUM_AUTO,
-    .role = I2S_ROLE_MASTER,
-    .dma_desc_num = 2, // NUM_DMA_BUFS,    // TODO Stellschraube
-    .dma_frame_num = NFRAMES, 
-    .auto_clear_after_cb = false,     // we don't need to do that ourselves. 
-    .auto_clear_before_cb = false, 
-    .allow_pd = false, 
-    .intr_priority = 5, 
-};    
 
+// I2S Rx config for the sender
 static i2s_chan_config_t i2s_rx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
-    .dma_desc_num = NUM_DMA_BUFS,
+    .dma_desc_num = NUM_RX_DMA_BUFS,
     .dma_frame_num = NFRAMES, 
     .auto_clear_after_cb = false, 
     .auto_clear_before_cb = false, 
@@ -163,8 +153,6 @@ static i2s_chan_config_t i2s_rx_chan_cfg = {
     .intr_priority = 5, 
 };    
 
-
-// I2S Rx config for the sender
 #ifdef I2S_STD
 static i2s_std_config_t i2s_rx_cfg = {
 #else
@@ -197,7 +185,18 @@ static i2s_tdm_config_t i2s_rx_cfg = {
     },
 };
 
-   // I2S Tx Config for the Receiver
+// I2S Tx Config for the Receiver
+static i2s_chan_config_t i2s_tx_chan_cfg = {
+    .id = I2S_NUM_AUTO,
+    .role = I2S_ROLE_MASTER,
+    .dma_desc_num = NUM_TX_DMA_BUFS, 
+    .dma_frame_num = NFRAMES, 
+    .auto_clear_after_cb = false,     // we don't need to do that ourselves. 
+    .auto_clear_before_cb = false, 
+    .allow_pd = false, 
+    .intr_priority = 5, 
+};    
+
 #ifdef I2S_STD   
 static i2s_std_config_t i2s_tx_cfg = {
 #else

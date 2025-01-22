@@ -204,25 +204,29 @@ void init_wifi_tx(bool setup_requested) {
     }
 }
 
+DRAM_ATTR static uint8_t *dmabuf; 
 
 IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
     
-    // we pass the *dma_buf and size in a struct, by reference. 
-    static dma_params_t dma_params;
-    dma_params.dma_buf = event->dma_buf;
-    dma_params.size = event->size;
+    dmabuf = (uint8_t *)(event->dma_buf);
+    
 #ifdef TX_DEBUG
-    _log[p].loc = 1;
+    _log[p].loc = 0;
     _log[p].time = get_time_us_in_isr();
     _log[p].ptr = event->dma_buf;
     _log[p].size = event->size; 
     p++;
 #endif
-    // size is not used, so we could just transfer  (uint32_t)(event->dma_buf)
-    xTaskNotifyFromISR(i2s_rx_task_handle, (uint32_t)(&dma_params), eSetValueWithOverwrite, &xHigherPriorityTaskWoken);
+
+    xTaskNotifyFromISR(udp_tx_task_handle, 0, eNoAction, &xHigherPriorityTaskWoken);
     return (xHigherPriorityTaskWoken == pdTRUE);
 }    
+
+
+#ifdef TX_DEBUG
+static char t[][20] = {"ISR", "beg. i2s_rx_task", "i2s_rx_task notif.", "i2s_rx notify udp", "udp_tx_t. notif.", "udp sent" }; 
+#endif
 
 
 void i2s_rx_task(void *args) {
@@ -236,17 +240,11 @@ void i2s_rx_task(void *args) {
     uint32_t checksum; 
     uint32_t num_bytes = UDP_BUF_SIZE - 2 * NUM_SLOTS_UDP * SLOT_SIZE_UDP;
 
-
-    
-#ifdef TX_DEBUG
-    char t[][15] = {"", "ISR", "begin loop", "after notify", "channel_read", "packing", "udp send", "end loop" }; 
-#endif
-
     memset(udpbuf, 0, UDP_BUF_SIZE);    
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
 #ifdef TX_DEBUG
-        _log[p].loc = 2;
+        _log[p].loc = 1;
         _log[p].time = get_time_us_in_isr();
         p++;
 #endif        
@@ -257,7 +255,7 @@ void i2s_rx_task(void *args) {
         dmabuf = dma_params->dma_buf;
         size = dma_params->size;                    // size is not used, so we could just transfer the *dma_buf. 
 #ifdef TX_DEBUG        
-        _log[p].loc = 3;
+        _log[p].loc = 2;
         _log[p].time = get_time_us_in_isr();
         _log[p].ptr = dmabuf;
         _log[p].size = size;
@@ -273,7 +271,7 @@ void i2s_rx_task(void *args) {
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
                 memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                        dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
+                        dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,
                         SLOT_SIZE_UDP);
             }                    
         }
@@ -286,11 +284,12 @@ void i2s_rx_task(void *args) {
                 3); 
 */                 
         // insert XOR checksum after the sample data
-        (uint32_t *)udpbuf[UDP_BUF_SIZE/4] = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
+        checksum = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
+        memcpy (udpbuf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
         // TODO insert S1, S2 in the last byte
 
 #ifdef TX_DEBUG        
-        _log[p].loc = 5;
+        _log[p].loc = 3;
         _log[p].time = get_time_us_in_isr(); 
         p++;
 #endif    
@@ -299,35 +298,11 @@ void i2s_rx_task(void *args) {
         // checksumming
         
         // send. 
-        xTaskNotifyIndexed(udp_tx_task_handle, 0, size, eSetValueWithOverwrite);
+        xTaskNotifyGive(udp_tx_task_handle);
+        // xTaskNotifyIndexed(udp_tx_task_handle, 0, size, eSetValueWithOverwrite);
 
         // ESP_LOGI(RX_TAG, "p = %d", p);
-#ifdef TX_DEBUG
-        if (p >= NUM) {
-            i2s_channel_disable(i2s_rx_handle); // also stop all interrupts
-            int q; 
-            uint32_t curr_time, prev_time=0;
-            for (q=0; q<p; q++) {
-                switch (_log[q].loc) {
-                    case 1:         // ISR
-                        curr_time = _log[q].time;
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, 
-                                curr_time - prev_time,
-                                (uint32_t) _log[q].ptr, _log[q].size);
-                        prev_time = curr_time;
-                        break; 
-                    default:
-                        printf("%15s time %lu diff %lu dma_buf 0x%08lx size %lu \n", 
-                                t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
-                        break;
-                }                        
-            }
-            vTaskDelete(NULL); 
-        }
-#endif
         // blink LED        
-/*        
         loops = (loops + 1) % (SAMPLE_RATE / NFRAMES);
         if (loops == 0) {
             // led ^= 0x01; // toggle
@@ -340,7 +315,7 @@ void i2s_rx_task(void *args) {
             }
             printf ("\n");
         }
-*/        
+
     }    
 }
 
@@ -356,12 +331,14 @@ void i2s_rx_task(void *args) {
 static heap_trace_record_t trace_record[NUM_RECORDS]; 
 */ 
 
-// mostly copied from examples/protocols/sockets/udp_client/main/udp_client.c
 void udp_tx_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;
 
     int err; 
+    int i, j; 
+    uint32_t count = 0; 
+    uint32_t checksum; 
 
     dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);
     dest_addr.sin_family = AF_INET;
@@ -389,8 +366,37 @@ void udp_tx_task(void *args) {
         while (1) {
 
             xTaskNotifyWait(0, ULONG_MAX, NULL, portMAX_DELAY);
+
+#ifdef TX_DEBUG        
+            _log[p].loc = 4;
+            _log[p].time = get_time_us_in_isr(); 
+            p++;
+#endif    
+
+            // packing 
+            memset (udpbuf, 0, UDP_PAYLOAD_SIZE);                           
+            for (i=0; i<NFRAMES; i++) {
+                for (j=0; j<NUM_SLOTS_I2S; j++) {                
+                    // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
+                    // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                    memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                            dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
+                            SLOT_SIZE_UDP);
+                }                    
+            }
+                           
+            // insert XOR checksum after the sample data
+            checksum = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
+            memcpy (udpbuf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
+            // TODO insert S1, S2 in the last byte
             
             err = sendto(sock, udpbuf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            
+#ifdef TX_DEBUG        
+            _log[p].loc = 5;
+            _log[p].time = get_time_us_in_isr(); 
+            p++;
+#endif    
             // ESP_LOGI(TX_TAG, "err=%d errno=%d", err, errno);
             if (err < 0) {
         	    if (errno == ENOMEM) {
@@ -406,8 +412,36 @@ void udp_tx_task(void *args) {
                     break;
                 }
     	    }
+    	    // count = (count + 1) & 0x03ff; // 1024
+    	    // if (count == 0) printf ("."); 
             // ESP_LOGI(TX_TAG, "Message sent");
 
+#ifdef TX_DEBUG
+            if (p >= NUM) {
+                i2s_channel_disable(i2s_rx_handle); // also stop all interrupts
+                int q; 
+                uint32_t curr_time, prev_time=0;
+                for (q=0; q<p; q++) {
+                    switch (_log[q].loc) {
+                        case 0:         // ISR
+                            curr_time = _log[q].time;
+                            printf("%20s %lu diff %lu dma_buf 0x%08lx size %lu \n", 
+                                    t[_log[q].loc], _log[q].time, 
+                                    curr_time - prev_time,
+                                    (uint32_t) _log[q].ptr, _log[q].size);
+                            prev_time = curr_time;
+                            break; 
+                        default:
+                            printf("%20s %lu diff %lu dma_buf 0x%08lx size %lu \n", 
+                                    t[_log[q].loc], _log[q].time, _log[q].time-_log[q-1].time, (uint32_t)_log[q].ptr, _log[q].size);
+                            break;
+                    } 
+                    vTaskDelay(10/portTICK_PERIOD_MS);                       
+                }
+                vTaskDelete(i2s_rx_task_handle); 
+                vTaskDelete (NULL); 
+            }
+#endif
         }
 
         if (sock != -1) {
@@ -418,6 +452,9 @@ void udp_tx_task(void *args) {
             // heap_trace_dump();
             // vTaskDelete(NULL);
         }
+        
+        
+        
     }
     // should never be reached
     vTaskDelete(NULL);

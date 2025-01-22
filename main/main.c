@@ -96,9 +96,10 @@ void monitor_task(void *args) {
 // and ESP32 does not support unaligned uint8_t accesses and will always generate an exception
 uint32_t calculate_checksum(uint32_t *buffer, size_t size) {
     uint32_t checksum = 0;
-
+    int i; 
+    
     for (i = 0; i < size; i++) {  
-        checksum ^= buffer + i;
+        checksum ^= *(buffer + i);
     }
     return checksum; 
 }
@@ -166,7 +167,7 @@ void app_main(void) {
         xTaskCreate(latency_meas_task, "latency_meas_task", 4096, NULL, 5, NULL);
 #else        
         // create I2S Rx task
-        xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
+        // xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
     
         // create UDP Tx task
         xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 15, &udp_tx_task_handle);
@@ -232,6 +233,9 @@ void app_main(void) {
         i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
+    }
+    while (1) {
+        vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
 }
 

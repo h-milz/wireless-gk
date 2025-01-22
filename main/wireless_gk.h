@@ -46,14 +46,15 @@
 #include "lwip/sys.h"
 #include "lwip/errno.h"
 
+// TODO remove for production compilation 
+#pragma GCC diagnostic ignored "-Wunused-variable"
+#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
+
+
 // #define TX_DEBUG
 // #define RX_DEBUG
 // #define LATENCY_MEAS                 // activate this if you want to do a UDP latency measurement. 
                                         // Connect Tx SIG_PIN to Rx ISR_PIN and GND to GND. 
-
-// TODO remove for production compilation 
-#pragma GCC diagnostic ignored "-Wunused-variable"
-#pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 // during development, we use STD with PCM1808 ADC and PCM5102 DAC
 #define I2S_STD
@@ -64,6 +65,49 @@
 #else
 #include "driver/i2s_tdm.h"
 #endif
+
+/* ***************************************************************
+ * WiFi Defines
+ * ***************************************************************/
+
+#define TX_TEST
+
+#ifdef TX_TEST
+#define SSID "WGK" 
+#define PASS "start123"
+#endif
+#define RX_IP_ADDR "192.168.4.1" 
+#define PORT 45678
+
+#define MAX_RETRY 5
+
+#define WIFI_CONNECTED_BIT BIT0
+#define WIFI_FAIL_BIT      BIT1
+
+extern EventGroupHandle_t s_wifi_event_group;
+void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
+
+
+/* ***************************************************************
+ * Logging
+ * ***************************************************************/
+
+#if (defined RX_DEBUG || defined TX_DEBUG)
+#define NUM 50
+typedef struct { 
+    uint8_t loc;        // location
+    uint32_t time;      // timestamp in µs
+    uint8_t *ptr;       // pointer to buffer
+    uint32_t size;        // data size
+    uint32_t uint32ptr;       // converted pointer to buffer
+} log_t; 
+extern volatile int p;
+extern volatile log_t _log[];
+#endif 
+
+/* ***************************************************************
+ * I2S Defines
+ * ***************************************************************/
 
 #define I2S_MCLK_MULTIPLE I2S_MCLK_MULTIPLE_256
 #define I2S_DATA_BIT_WIDTH I2S_DATA_BIT_WIDTH_32BIT
@@ -100,48 +144,11 @@
 #define I2S_NUM                 I2S_NUM_AUTO
 #define SAMPLE_RATE             44100                   // 44100
 
-// WiFi stuff
-// this will later be replaced by random values created in SETUP and proliferated via WPS
-#define TX_TEST
 
-#ifdef TX_TEST
-#define SSID "WGK" 
-#define PASS "start123"
-#endif
-#define RX_IP_ADDR "192.168.4.1" 
-#define PORT 45678
+/* ***************************************************************
+ * I2S Rx config for the sender
+ * ***************************************************************/
 
-#ifndef MIN
-#define MIN(a,b) ((a)<(b)?(a):(b))
-#endif
-
-#if (defined RX_DEBUG || defined TX_DEBUG)
-#define NUM 50
-typedef struct { 
-    uint8_t loc;        // location
-    uint32_t time;      // timestamp in µs
-    uint8_t *ptr;       // pointer to buffer
-    uint32_t size;        // data size
-    uint32_t uint32ptr;       // converted pointer to buffer
-} log_t; 
-extern volatile int p;
-extern volatile log_t _log[];
-#endif 
-
-#define MAX_RETRY 5
-
-#define WIFI_CONNECTED_BIT BIT0
-#define WIFI_FAIL_BIT      BIT1
-
-extern EventGroupHandle_t s_wifi_event_group;
-void event_handler(void* arg, esp_event_base_t event_base, int32_t event_id, void* event_data);
-
-// UDP buffers
-extern uint8_t *udpbuf;
-
-// I2S stuff
-
-// I2S Rx config for the sender
 static i2s_chan_config_t i2s_rx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
@@ -185,7 +192,10 @@ static i2s_tdm_config_t i2s_rx_cfg = {
     },
 };
 
-// I2S Tx Config for the Receiver
+/* ***************************************************************
+ * I2S Tx Config for the Receiver
+ * ***************************************************************/
+
 static i2s_chan_config_t i2s_tx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
@@ -229,6 +239,16 @@ static i2s_tdm_config_t i2s_tx_cfg = {
     },
 };
 
+/* ***************************************************************
+ * UDP stuff 
+ * ***************************************************************/
+extern uint8_t *udpbuf;
+
+
+/* ***************************************************************
+ * Function prototypes
+ * ***************************************************************/
+
 // Sender stuff
 extern i2s_chan_handle_t i2s_rx_handle;
 extern TaskHandle_t i2s_rx_task_handle; 
@@ -253,14 +273,20 @@ bool init_gpio_rx(void);
 int find_free_channel(void);
 
 // main stuff
+/*
 typedef struct { 
     uint8_t *dma_buf;       // pointer to buffer
     uint32_t size;        // data size
 } dma_params_t; 
+*/
 
 uint32_t get_time_us_in_isr(void);
 
 #define NEOPIX_PIN GPIO_NUM_27              // for the DevKit-C
+#ifndef MIN
+#define MIN(a,b) ((a)<(b)?(a):(b))
+#endif
+
 
 
 

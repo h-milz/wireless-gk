@@ -151,7 +151,7 @@ void circular_buf_put(cbuf_handle_t me, uint8_t *data) {
 }
 
 
-size_t circular_buf_get(cbuf_handle_t me, uint8_t *data) {
+size_t circular_buf_get(cbuf_handle_t me, uint8_t **data) {
     assert(me && data && me->buffer);
 
     // we return the number of bytes retrieved
@@ -159,7 +159,9 @@ size_t circular_buf_get(cbuf_handle_t me, uint8_t *data) {
 
     if(!circular_buf_empty(me)) {
         // *data = me->buffer[me->tail];
-        memcpy(data, me->buffer + (me->tail * me->elem_size), me->elem_size); 
+        // memcpy(data, me->buffer + (me->tail * me->elem_size), me->elem_size); 
+        // to save one extra memcpy, we return only the pointer to the buffer tail        
+        *data = me->buffer + (me->tail * me->elem_size); 
         retreat_pointer(me);
 
         r = me->elem_size;
@@ -187,8 +189,8 @@ void main(void) {
     // now let's play a bit
     // this is our received data after recv_from:
     uint8_t *recvbuf = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t));
-    // and this is our i2s buf
-    uint8_t *i2sbuf = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t));
+    // and this is our packed buf pointer for the i2s callback
+    uint8_t *i2sbuf; //  = (uint8_t *)calloc(UDP_BUF_SIZE, sizeof(uint8_t));
     
 
     for (i=10; i<30; i++) {
@@ -201,7 +203,7 @@ void main(void) {
         printf ("cbuf content: %02d %02d %02d %02d \n", udpbuf[10], udpbuf[10+UDP_BUF_SIZE], 
                                                         udpbuf[10+2*UDP_BUF_SIZE], udpbuf[10+3*UDP_BUF_SIZE]);
 
-        size_t res = circular_buf_get(cbuf, i2sbuf);
+        size_t res = circular_buf_get(cbuf, &i2sbuf);
         
         // see what is in i2sbuf
         printf ("i2sbuf content: %02d, res = %ld \n", i2sbuf[10], res);

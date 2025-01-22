@@ -233,7 +233,7 @@ void i2s_rx_task(void *args) {
     uint32_t evt_p;
     dma_params_t *dma_params;
     uint32_t count = 0; 
-    uint8_t checksum; 
+    uint32_t checksum; 
     uint32_t num_bytes = UDP_BUF_SIZE - 2 * NUM_SLOTS_UDP * SLOT_SIZE_UDP;
 
 
@@ -279,19 +279,15 @@ void i2s_rx_task(void *args) {
         }
 #endif
         // insert current packet count into the last slot. only 24 least significant bits
+/*
         count = (count + 1) & 0x00FFFFFF; 
         memcpy ((uint32_t *)(udpbuf + UDP_BUF_SIZE - 3 ),      
                 &count,
                 3); 
-                
-        // insert XOR checksum 
-        // into second byte of the last slot
-        checksum = 0; 
-        for (i = 0; i < num_bytes; i++) {
-            checksum ^= udpbuf[i];
-        }
-        udpbuf[UDP_BUF_SIZE - 27] = checksum;    // one slot before. 
-
+*/                 
+        // insert XOR checksum after the sample data
+        (uint32_t *)udpbuf[UDP_BUF_SIZE/4] = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
+        // TODO insert S1, S2 in the last byte
 
 #ifdef TX_DEBUG        
         _log[p].loc = 5;

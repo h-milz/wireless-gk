@@ -27,7 +27,7 @@ EventGroupHandle_t s_wifi_event_group;
 
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
-uint8_t *udpbuf, *recvbuf;
+uint8_t *udp_tx_buf, *udp_rx_buf, *ringbuf;
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 
@@ -152,7 +152,7 @@ void app_main(void) {
         
         // create udp buffers explicitly in RAM
         // we use only one in the sender. 
-        udpbuf = (uint8_t *)heap_caps_calloc(UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+        udp_tx_buf = (uint8_t *)heap_caps_calloc(UDP_PAYLOAD_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
@@ -205,9 +205,9 @@ void app_main(void) {
         vTaskDelay(200/portTICK_PERIOD_MS);
         
         // create udp ring buffer explicitly in DRAM
-        udpbuf = (uint8_t *)heap_caps_calloc(NUM_UDP_BUFS * UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        ringbuf = (uint8_t *)heap_caps_calloc(NUM_UDP_BUFS * UDP_BUF_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         // and the UDP receive buffer
-        recvbuf = (uint8_t *)heap_caps_calloc(UDP_PAYLOAD_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+        udp_rx_buf = (uint8_t *)heap_caps_calloc(UDP_PAYLOAD_SIZE, sizeof(uint8_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
             
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);

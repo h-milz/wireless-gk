@@ -228,7 +228,7 @@ IRAM_ATTR bool i2s_rx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
 static char t[][20] = {"ISR", "beg. i2s_rx_task", "i2s_rx_task notif.", "i2s_rx notify udp", "udp_tx_t. notif.", "udp sent" }; 
 #endif
 
-
+#if 0
 void i2s_rx_task(void *args) {
     int i, j;
     uint32_t size;
@@ -240,7 +240,7 @@ void i2s_rx_task(void *args) {
     uint32_t checksum; 
     uint32_t num_bytes = UDP_BUF_SIZE - 2 * NUM_SLOTS_UDP * SLOT_SIZE_UDP;
 
-    memset(udpbuf, 0, UDP_BUF_SIZE);    
+    memset(udp_tx_buf, 0, UDP_PAYLOAD_SIZE);    
     // we get passed the *dma_buf and size, then pack, optionally checksum, and send. 
     while(1) {     
 #ifdef TX_DEBUG
@@ -263,14 +263,14 @@ void i2s_rx_task(void *args) {
 #endif
         // read DMA buffer and pack
 #ifndef TX_TEST
-        memcpy (udpbuf, dmabuf, size);         
+        memcpy (udp_tx_buf, dmabuf, size);         
 #else        
-        // memset (udpbuf, 0, UDP_BUF_SIZE);         // clean up first
+        // memset (udp_tx_buf, 0, UDP_BUF_SIZE);         // clean up first
         for (i=0; i<NFRAMES; i++) {
             for (j=0; j<NUM_SLOTS_I2S; j++) {                
                 // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                 // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                memcpy (udp_tx_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                         dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,
                         SLOT_SIZE_UDP);
             }                    
@@ -279,13 +279,13 @@ void i2s_rx_task(void *args) {
         // insert current packet count into the last slot. only 24 least significant bits
 /*
         count = (count + 1) & 0x00FFFFFF; 
-        memcpy ((uint32_t *)(udpbuf + UDP_BUF_SIZE - 3 ),      
+        memcpy ((uint32_t *)(udp_tx_buf + UDP_BUF_SIZE - 3 ),      
                 &count,
                 3); 
 */                 
         // insert XOR checksum after the sample data
-        checksum = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
-        memcpy (udpbuf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
+        checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
+        memcpy (udp_tx_buf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
         // TODO insert S1, S2 in the last byte
 
 #ifdef TX_DEBUG        
@@ -318,7 +318,7 @@ void i2s_rx_task(void *args) {
 
     }    
 }
-
+#endif
 
 /*
  * UDP stuff
@@ -355,8 +355,8 @@ void udp_tx_task(void *args) {
             break;
         }
 
-        // Set timeout
-        setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+        // Set timeout not needed because the sendto is non-blocking. 
+        // setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         
         // TODO UDP send buffer size - default 5760, can we make much bigger! 
         // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
@@ -374,23 +374,24 @@ void udp_tx_task(void *args) {
 #endif    
 
             // packing 
-            memset (udpbuf, 0, UDP_PAYLOAD_SIZE);                           
+            // memset (udp_tx_buf, 0, UDP_PAYLOAD_SIZE);                           
             for (i=0; i<NFRAMES; i++) {
                 for (j=0; j<NUM_SLOTS_I2S; j++) {                
                     // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                     // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                    memcpy (udpbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                            dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             // bytes are big endian. 
+                    memcpy (udp_tx_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                            dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             
                             SLOT_SIZE_UDP);
                 }                    
             }
                            
             // insert XOR checksum after the sample data
-            checksum = calculate_checksum((uint32_t *)udpbuf, UDP_BUF_SIZE/4); 
-            memcpy (udpbuf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
+            checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
+            memcpy (udp_tx_buf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
             // TODO insert S1, S2 in the last byte
             
-            err = sendto(sock, udpbuf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udp_tx_buf, UDP_PAYLOAD_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            // err = sendto(sock, udp_tx_buf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             
 #ifdef TX_DEBUG        
             _log[p].loc = 5;
@@ -412,10 +413,13 @@ void udp_tx_task(void *args) {
                     break;
                 }
     	    }
-    	    // count = (count + 1) & 0x03ff; // 1024
-    	    // if (count == 0) printf ("."); 
-            // ESP_LOGI(TX_TAG, "Message sent");
-
+#if 0
+    	    count = (count + 1) & 0x07ff; // 4096
+    	    if (count == 0) {
+    	        ESP_LOGI(TX_TAG, "2048 packets sent, size %d", UDP_PAYLOAD_SIZE); 
+    	    }
+#endif
+                
 #ifdef TX_DEBUG
             if (p >= NUM) {
                 i2s_channel_disable(i2s_rx_handle); // also stop all interrupts
@@ -486,12 +490,12 @@ void latency_meas_task(void *args) {
 
     ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
 
-    memset (udpbuf, 0xaa, UDP_BUF_SIZE);         // fake data
+    memset (udp_tx_buf, 0xaa, UDP_BUF_SIZE);         // fake data
 
     while (1) {
         gpio_set_level(SIG_PIN, 1);    
 
-        err = sendto(sock, udpbuf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+        err = sendto(sock, udp_tx_buf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
         
         ESP_LOGI (TX_TAG, "latency packet sent");
 

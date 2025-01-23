@@ -25,7 +25,7 @@
 #include "cbuf.h"
 
 void circular_buf_reset(cbuf_handle_t me) {
-    assert(me);
+    // assert(me);
 
     me->head = 0;
     me->tail = 0;
@@ -34,21 +34,21 @@ void circular_buf_reset(cbuf_handle_t me) {
 
 
 bool circular_buf_empty(cbuf_handle_t me) {
-	assert(me);
+	// assert(me);
 
 	return (!me->full && (me->head == me->tail));
 }
 
 
 bool circular_buf_full(cbuf_handle_t me) {
-	assert(me);
+	// assert(me);
 
 	return me->full;
 }
 
 
 cbuf_handle_t circular_buf_init(uint8_t *buffer, size_t size, size_t elem_size) {
-	assert(buffer && size);
+	// assert(buffer && size);
 
 	cbuf_handle_t cbuf = malloc(sizeof(circular_buf_t));
 	assert(cbuf);
@@ -65,7 +65,7 @@ cbuf_handle_t circular_buf_init(uint8_t *buffer, size_t size, size_t elem_size) 
 
 
 static void advance_pointer(cbuf_handle_t me) {
-	assert(me);
+	// assert(me);
 
 	if(me->full) {
 		if (++(me->tail) == me->max) { 
@@ -82,7 +82,7 @@ static void advance_pointer(cbuf_handle_t me) {
 
 
 static void retreat_pointer(cbuf_handle_t me) {
-	assert(me);
+	// assert(me);
 
 	me->full = false;
 	if (++(me->tail) == me->max) { 
@@ -93,7 +93,7 @@ static void retreat_pointer(cbuf_handle_t me) {
 
 // this version of put will overwrite the oldest values
 void circular_buf_put(cbuf_handle_t me, uint8_t *data) {
-	assert(me && me->buffer);
+	// assert(me && me->buffer);
 
     //me->buffer[me->head] = data;
     memcpy(me->buffer + (me->head * me->elem_size), data, me->elem_size); 
@@ -106,7 +106,7 @@ void circular_buf_put(cbuf_handle_t me, uint8_t *data) {
 //     assert(me && data && me->buffer);
 
 uint8_t * circular_buf_get(cbuf_handle_t me) {
-    assert(me && me->buffer);
+    // assert(me && me->buffer);
     
     uint8_t *data = NULL; 
 

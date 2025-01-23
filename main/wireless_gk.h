@@ -53,7 +53,7 @@
 #pragma GCC diagnostic ignored "-Wunused-but-set-variable"
 
 
-#define TX_DEBUG
+// #define TX_DEBUG
 // #define RX_DEBUG
 // #define LATENCY_MEAS                 // activate this if you want to do a UDP latency measurement. 
                                         // Connect Tx SIG_PIN to Rx ISR_PIN and GND to GND. 
@@ -75,10 +75,10 @@
 #define TX_TEST
 
 #ifdef TX_TEST
-#define SSID "WGK" 
+#define SSID "WGK"
 #define PASS "start123"
 #endif
-#define RX_IP_ADDR "192.168.4.1" 
+#define RX_IP_ADDR "192.168.4.1"
 #define PORT 45678
 
 #define MAX_RETRY 5
@@ -125,7 +125,7 @@ extern volatile log_t _log[];
  *         The default MTU size for WiFi is 1500, resulting in a maximum payload of 1472 byte.
  *         We send NSAMPLES * NUM_SLOTS_UDP * SLOT_SIZE_UDP byte = 1440 byte. 61 frames would work as well. 
  */ 
-#define NFRAMES                 60                      // the number of frames we want to send in a datagram
+#define NFRAMES                 60                      // the number of frames we want to send in a datagram 
 #define NUM_SLOTS_I2S           2                       // number of channels in one sample, 2 for stereo, 8 for 8-channel audio
 #define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each
 #define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
@@ -138,7 +138,7 @@ extern volatile log_t _log[];
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_UDP_BUFS            4                       // must be a power of 2 due to the way the buffer index is incremented
-#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 5        // 5 = 4 bytes for XOR checksum + 1 byte S1, S2
+#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 8        // 5 = 4 bytes for XOR checksum + 1 byte S1, S2
 
 #define NUM_I2S_BUFS            4 
 #define I2S_CBUF_SIZE           DMA_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size
@@ -154,7 +154,7 @@ extern volatile log_t _log[];
 static i2s_chan_config_t i2s_rx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
-    .dma_desc_num = NUM_RX_DMA_BUFS,
+    .dma_desc_num = NUM_TX_DMA_BUFS,
     .dma_frame_num = NFRAMES, 
     .auto_clear_after_cb = false, 
     .auto_clear_before_cb = false, 
@@ -244,7 +244,7 @@ static i2s_tdm_config_t i2s_tx_cfg = {
 /* ***************************************************************
  * UDP stuff 
  * ***************************************************************/
-extern uint8_t *udpbuf, *recvbuf;
+extern uint8_t *udp_tx_buf, *udp_rx_buf, *ringbuf;
 
 
 /* ***************************************************************

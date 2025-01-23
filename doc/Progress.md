@@ -1,5 +1,9 @@
 # Progress 
 
+2025-01-23
+
+ * added UDP Rx ring buffer, lots of experimenting and optimization. Rx-Tx work now with very few glitches probably still caused by UDP jitter. 
+
 2025-01-20
 
  * sample interpolation and circular buffer experiments

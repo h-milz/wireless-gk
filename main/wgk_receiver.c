@@ -37,9 +37,6 @@ TaskHandle_t udp_rx_task_handle = NULL;
 
 static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
 
-// static receive buffer
-// static uint8_t recvbuf[UDP_PAYLOAD_SIZE]; 
-
 DRAM_ATTR static cbuf_handle_t cbuf; 
 
 #ifdef RX_DEBUG
@@ -118,6 +115,7 @@ static wifi_ap_record_t ap_records[MAX_AP_RECORDS];
 // TODO as soon as ESP-IDF supports country settings for 5G, use them, 
 // preferably a safe mode that works internationally
 // very possible that wifi_scan_config_t will be set correctly anyway. 
+// in MCS7, the transmit power is internally set to 13 dBm for HT20 which is equivalent to ~20 mW. 
 int find_free_channel(void) {
     // country settings? 
     
@@ -234,6 +232,7 @@ void init_wifi_rx(bool setup_requested) {
         wifi_config.ap.channel = channel;
         wifi_config.ap.max_connection = 2;          // TODO for debugging maybe, should be 1 in production
         wifi_config.ap.authmode = WIFI_AUTH_WPA3_PSK;
+        wifi_config.ap.pmf_cfg.required = true;
     }    
     
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
@@ -314,11 +313,11 @@ void udp_rx_task(void *args) {
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(PORT);
 
-    timeout.tv_sec = 1;       // 1 second timeout is plenty! 
+    timeout.tv_sec = 10;       // 1 second timeout is plenty! 
     timeout.tv_usec = 0;
 
     // initialize circular buffer
-    cbuf = circular_buf_init(udpbuf, NUM_UDP_BUFS, UDP_BUF_SIZE * sizeof(uint8_t *)); 
+    cbuf = circular_buf_init(ringbuf, NUM_UDP_BUFS, UDP_BUF_SIZE * sizeof(uint8_t)); 
     
     while (1) {
 
@@ -346,7 +345,15 @@ void udp_rx_task(void *args) {
             _log[p].time = get_time_us_in_isr(); 
             p++;
 #endif
-            int len = recvfrom(sock, recvbuf, UDP_PAYLOAD_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(sock, udp_rx_buf, UDP_PAYLOAD_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+
+#if 0
+    	    count = (count + 1) & 0x07ff; // 4096
+    	    if (count == 0) {
+    	        ESP_LOGI(RX_TAG, "2048 packets received, last len = %d ", len); 
+    	    }
+#endif
+
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
             ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
@@ -359,24 +366,24 @@ void udp_rx_task(void *args) {
             p++;
 #endif
 
-            // TODO checksum? should be checked in udp_rx_task, and put nothing in ring buffer if err.
-            // is a 8 bit XOR checksum enough?
-            // The checksum will be at (uint32_t)UDP_BUF_SIZE
-            // S1 S2 will be at (uint32_t)UDP_PAYLOAD_SIZE-1 , i.e. the last byte
-                    
             if (len == UDP_PAYLOAD_SIZE) {
-                // assume success. check checksum based on uint32_t
-                memcpy (&checksum, recvbuf + UDP_BUF_SIZE, sizeof(checksum)); 
-                mychecksum = calculate_checksum((uint32_t *)recvbuf, UDP_BUF_SIZE/4); 
-                if (checksum == mychecksum) {
-                    circular_buf_put(cbuf, recvbuf);            // will only copy elem_size bytes, i.e. ignore checksum and switches
-                } else {
-                    ESP_LOGW(RX_TAG, "packet checksum err"); 
-                }
+                // assume success. verify checksum 
+                memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
+                mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, UDP_BUF_SIZE/4); 
+                // if (checksum == mychecksum) {
+                    circular_buf_put(cbuf, udp_rx_buf);            // this will copy only elem_size bytes, i.e. ignore checksum and switches
+#if 0
+            	    if (count == 0) {               // hier müsste man einen extra counter machen.
+            	        ESP_LOGI(RX_TAG, "2048 packets processed"); 
+            	    }
+#endif 
+                // } else {
+                //     ESP_LOGW(RX_TAG, "packet checksum err"); 
+                // }
                 
                 // TODO extract S1, S2 to global var. 
-        	    count = (count + 1) & 0x03ff; // 1024
-        	    if (count == 0) printf ("."); 
+                // S1 S2 will be at (uint32_t)UDP_PAYLOAD_SIZE-1 , i.e. the last byte
+
                 
                 
 #ifdef COUNT_PACKAGES
@@ -391,7 +398,7 @@ void udp_rx_task(void *args) {
 #endif                
             } else if (len == -1) {
                 // we ignore broken packets for now. 
-                ESP_LOGW(RX_TAG, "broken / lost packet");
+                ESP_LOGW(RX_TAG, "UDP receive error: %d", errno);
                 continue; 
             } else if (len < 0) {
                 // TODO if we have a UDP timeout it's probably better to stop operation

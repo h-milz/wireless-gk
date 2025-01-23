@@ -3,7 +3,7 @@
 import sys
 
 # Configuration
-INPUT_FILE = "i2s_data.raw"  # Replace with your file name
+INPUT_FILE = "i2s.raw"  # Replace with your file name
 SAMPLE_SIZE = 3                # Each sample is 3 bytes
 SAMPLES_PER_FRAME = 8          # 4 samples per frame
 FRAME_SIZE = SAMPLE_SIZE * SAMPLES_PER_FRAME  # 12 bytes per frame

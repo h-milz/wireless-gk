@@ -260,6 +260,8 @@ void init_wifi_rx(bool setup_requested) {
 
 }
 
+DRAM_ATTR uint32_t nullframes = 0; 
+DRAM_ATTR bool stopped = true;
 
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
@@ -281,7 +283,13 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
 #endif
     // fetch cbuf tail pointer
     i2sbuf = circular_buf_get(cbuf); 
-    if (i2sbuf == NULL) return false;      // this will be the case right after start, when the cbuf is still empty
+    if (i2sbuf == NULL ) {
+        nullframes++; 
+        return false;      // this will be the case right after start, when the cbuf is still empty
+    }  
+    if (stopped) {       
+        return false;
+    }
     // unpack and write to most recent free dma buffer
     // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
     for (i=0; i<NFRAMES; i++) {
@@ -296,13 +304,27 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     return false; 
 }    
 
+#ifdef LATENCY_MEAS
+#include <math.h>
+#endif
+
 // udp_rx_task receives packets as they arrive, and puts them in the ring buffer
 #define PACKETS_PER_SECOND (SAMPLE_RATE / NFRAMES)
 void udp_rx_task(void *args) {
 
     int i, j;
-    uint32_t count = 0, mycount = 0; 
+    uint32_t count_received = 0, count_processed = 0; 
     uint32_t checksum, mychecksum; 
+#ifdef LATENCY_MEAS    
+    uint32_t count = 0; 
+    uint32_t diff, avgdiff, sumdiff = 0; 
+    float delta, M = 0.0, S = 0.0, variance, stddev; 
+    uint32_t mindiff = 0xffffffff;
+    uint32_t maxdiff = 0;
+#endif    
+    uint32_t numpackets = 0x07ff; 
+    uint32_t initial_count = 0;
+    uint32_t min_count = NUM_UDP_BUFS / 2; 
 
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
@@ -347,16 +369,25 @@ void udp_rx_task(void *args) {
 #endif
             int len = recvfrom(sock, udp_rx_buf, sizeof(udp_buf_t), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
-#if 1
-    	    count = (count + 1) & 0x07ff; // 4096
-    	    if (count == 0) {
-    	        ESP_LOGI(RX_TAG, "2048 packets received, last len = %d ", len); 
-    	    }
-#endif
-
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
-            ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
+            // ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);
+            diff = stop_time - start_time;
+            mindiff = diff < mindiff ? diff : mindiff;
+            maxdiff = diff > maxdiff ? diff : maxdiff; 
+            sumdiff += diff;
+            // using Welford’s algorithm. 
+            count++; 
+    	    delta = (float)diff - M;
+    	    M = M + delta / count; 
+    	    S = S + delta * ((float)diff - M); 
+#endif
+
+#if 1
+    	    count_received = (count_received + 1) & numpackets; // 4096
+    	    if (count_received == 0) {
+    	        ESP_LOGI(RX_TAG, "%lu packets received, last len = %d ", numpackets+1, len); 
+    	    }
 #endif
 
 #ifdef RX_DEBUG        
@@ -372,10 +403,28 @@ void udp_rx_task(void *args) {
                 // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 if (checksum == mychecksum) {
-                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);            // this will copy only elem_size bytes, i.e. ignore checksum and switches
+                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);  // this will copy only elem_size bytes, i.e. ignore extra data
+                    // fill buffer with MAX/2 packets
+                    if (stopped) {
+                        initial_count++;
+                        if (initial_count >= min_count) {
+                            stopped = false;
+                            ESP_LOGW(RX_TAG, "running"); 
+                        } 
+                    }
 #if 1
-            	    if (count == 0) {               // hier müsste man einen extra counter machen.
-            	        ESP_LOGI(RX_TAG, "2048 packets processed"); 
+            	    count_processed = (count_processed + 1) & numpackets;
+            	    if (count_processed == 0) {               // hier müsste man einen extra counter machen.
+            	        ESP_LOGI(RX_TAG, "%lu packets processed, %lu nullframes", numpackets+1, nullframes); 
+#ifdef LATENCY_MEAS
+            	        variance = S / (count - 1);
+            	        stddev = sqrt(variance);
+            	        printf ("min %lu, max %lu, avg' = %lu, avg %.2f, stddev %.2f\n", mindiff, maxdiff, sumdiff / count, M, stddev);  
+            	        M = S = 0.0; 
+            	        count = sumdiff = 0; 
+            	        mindiff = 0xffffffff;
+            	        maxdiff = 0; 
+#endif            	        
             	    }
 #endif 
                 } else {

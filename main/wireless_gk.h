@@ -138,7 +138,7 @@ extern volatile log_t _log[];
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_UDP_BUFS            4                       // must be a power of 2 due to the way the buffer index is incremented
-#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 8        // 5 = 4 bytes for XOR checksum + 1 byte S1, S2
+#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 12        // 5 = 4 bytes for XOR checksum + 1 byte S1, S2
 
 #define NUM_I2S_BUFS            4 
 #define I2S_CBUF_SIZE           DMA_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size
@@ -257,7 +257,7 @@ typedef struct {
     udp_frame_t frame[NFRAMES];
     uint32_t checksum;
     uint32_t timestamp;
-    uint8_t switches;
+    uint32_t switches;
 } udp_buf_t;
 
 // static udp_buf_t udp_tx_buf;

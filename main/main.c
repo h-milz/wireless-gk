@@ -154,6 +154,8 @@ void app_main(void) {
         // create udp buffers explicitly in RAM
         // we use only one in the sender. 
         udp_tx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+        udp_tx_buf->timestamp = 0;
+        udp_tx_buf->switches = 0;
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
@@ -171,7 +173,7 @@ void app_main(void) {
         // xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
     
         // create UDP Tx task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 15, &udp_tx_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 12, &udp_tx_task_handle);
 
         // xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 
@@ -206,9 +208,11 @@ void app_main(void) {
         vTaskDelay(200/portTICK_PERIOD_MS);
         
         // create udp ring buffer explicitly in DRAM
-        ringbuf = (udp_frame_t *)heap_caps_calloc(1, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        ringbuf = (udp_frame_t *)heap_caps_calloc(NFRAMES * NUM_UDP_BUFS, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         // and the UDP receive buffer
-        udp_rx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
+        udp_rx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        udp_rx_buf->timestamp = 0;
+        udp_rx_buf->switches = 0;
             
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);
@@ -235,6 +239,10 @@ void app_main(void) {
 
         i2s_channel_enable(i2s_tx_handle);
     }
+    
+    // ESP_LOGW(TAG, "udp_buf_t = %d", sizeof(udp_buf_t));
+    // ESP_LOGW(TAG, "UDP_PAYLOAD_SIZE = %d", UDP_PAYLOAD_SIZE);
+    
     while (1) {
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }

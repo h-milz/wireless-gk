@@ -379,7 +379,7 @@ void udp_tx_task(void *args) {
                 for (j=0; j<NUM_SLOTS_I2S; j++) {                
                     // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1 
                     // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                    memcpy (udp_tx_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                    memcpy ((uint8_t *)udp_tx_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                             dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1,             
                             SLOT_SIZE_UDP);
                 }                    
@@ -391,7 +391,7 @@ void udp_tx_task(void *args) {
             // TODO insert S1, S2 in the last byte
             
             err = sendto(sock, udp_tx_buf, sizeof(udp_buf_t), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
-            // err = sendto(sock, udp_tx_buf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            // err = sendto(sock, udp_tx_buf, UDP_PAYLOAD_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             
 #ifdef TX_DEBUG        
             _log[p].loc = 5;

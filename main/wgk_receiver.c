@@ -347,7 +347,7 @@ void udp_rx_task(void *args) {
 #endif
             int len = recvfrom(sock, udp_rx_buf, sizeof(udp_buf_t), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
-#if 0
+#if 1
     	    count = (count + 1) & 0x07ff; // 4096
     	    if (count == 0) {
     	        ESP_LOGI(RX_TAG, "2048 packets received, last len = %d ", len); 
@@ -371,16 +371,16 @@ void udp_rx_task(void *args) {
                 checksum = udp_rx_buf->checksum; 
                 // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
-                // if (checksum == mychecksum) {
+                if (checksum == mychecksum) {
                     circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);            // this will copy only elem_size bytes, i.e. ignore checksum and switches
-#if 0
+#if 1
             	    if (count == 0) {               // hier müsste man einen extra counter machen.
             	        ESP_LOGI(RX_TAG, "2048 packets processed"); 
             	    }
 #endif 
-                // } else {
-                //     ESP_LOGW(RX_TAG, "packet checksum err"); 
-                // }
+                } else {
+                    ESP_LOGW(RX_TAG, "packet checksum err"); 
+                }
                 
                 // TODO extract S1, S2 to global var. 
                 // S1 S2 will be at (uint32_t)UDP_PAYLOAD_SIZE-1 , i.e. the last byte

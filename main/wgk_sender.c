@@ -388,9 +388,17 @@ void udp_tx_task(void *args) {
             // insert XOR checksum after the sample data
             // checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
             udp_tx_buf->checksum = calculate_checksum((uint32_t *)udp_tx_buf, NFRAMES * sizeof(udp_frame_t) / 4);
+            udp_tx_buf->timestamp = get_time_us_in_isr();
             // TODO insert S1, S2 in the last byte
             
+            // UDP latency measurement
+#ifdef LATENCY_MEAS            
+            gpio_set_level(SIG_PIN, 1);    
+#endif            
             err = sendto(sock, udp_tx_buf, sizeof(udp_buf_t), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+#ifdef LATENCY_MEAS            
+            gpio_set_level(SIG_PIN, 0);    
+#endif
             // err = sendto(sock, udp_tx_buf, UDP_PAYLOAD_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             
 #ifdef TX_DEBUG        
@@ -464,7 +472,7 @@ void udp_tx_task(void *args) {
     vTaskDelete(NULL);
 }
 
-#ifdef LATENCY_MEAS            
+#if 0 // def LATENCY_MEAS            
 void latency_meas_task(void *args) {
     struct sockaddr_in dest_addr;
     struct timeval timeout;

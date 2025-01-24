@@ -386,11 +386,11 @@ void udp_tx_task(void *args) {
             }
                            
             // insert XOR checksum after the sample data
-            checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
-            memcpy (udp_tx_buf + UDP_BUF_SIZE, &checksum, sizeof(checksum)); 
+            // checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
+            udp_tx_buf->checksum = calculate_checksum((uint32_t *)udp_tx_buf, NFRAMES * sizeof(udp_frame_t) / 4);
             // TODO insert S1, S2 in the last byte
             
-            err = sendto(sock, udp_tx_buf, UDP_PAYLOAD_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udp_tx_buf, sizeof(udp_buf_t), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             // err = sendto(sock, udp_tx_buf, UDP_BUF_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             
 #ifdef TX_DEBUG        

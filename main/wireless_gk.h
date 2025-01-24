@@ -201,7 +201,7 @@ static i2s_tdm_config_t i2s_rx_cfg = {
 static i2s_chan_config_t i2s_tx_chan_cfg = {
     .id = I2S_NUM_AUTO,
     .role = I2S_ROLE_MASTER,
-    .dma_desc_num = NUM_TX_DMA_BUFS, 
+    .dma_desc_num = NUM_RX_DMA_BUFS, 
     .dma_frame_num = NFRAMES, 
     .auto_clear_after_cb = false,     // we don't need to do that ourselves. 
     .auto_clear_before_cb = false, 
@@ -242,9 +242,30 @@ static i2s_tdm_config_t i2s_tx_cfg = {
 };
 
 /* ***************************************************************
- * UDP stuff 
+ * buffer stuff 
  * ***************************************************************/
-extern uint8_t *udp_tx_buf, *udp_rx_buf, *ringbuf;
+ 
+typedef struct {
+    uint8_t slot[NUM_SLOTS_I2S * SLOT_SIZE_I2S];
+} i2s_frame_t;
+
+typedef struct {
+    uint8_t slot[NUM_SLOTS_UDP * SLOT_SIZE_UDP];
+} udp_frame_t;
+
+typedef struct {
+    udp_frame_t frame[NFRAMES];
+    uint32_t checksum;
+    uint32_t timestamp;
+    uint8_t switches;
+} udp_buf_t;
+
+// static udp_buf_t udp_tx_buf;
+// static udp_buf_t udp_rx_buf;
+// static udp_frame_t ringbuf[NFRAMES * NUM_UDP_BUFS];
+ 
+extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
+extern udp_frame_t *ringbuf;
 
 
 /* ***************************************************************

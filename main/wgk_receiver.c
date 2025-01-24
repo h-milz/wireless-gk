@@ -317,7 +317,7 @@ void udp_rx_task(void *args) {
     timeout.tv_usec = 0;
 
     // initialize circular buffer
-    cbuf = circular_buf_init(ringbuf, NUM_UDP_BUFS, UDP_BUF_SIZE * sizeof(uint8_t)); 
+    cbuf = circular_buf_init((uint8_t *)ringbuf, NUM_UDP_BUFS, NFRAMES * sizeof(udp_frame_t)); 
     
     while (1) {
 
@@ -345,7 +345,7 @@ void udp_rx_task(void *args) {
             _log[p].time = get_time_us_in_isr(); 
             p++;
 #endif
-            int len = recvfrom(sock, udp_rx_buf, UDP_PAYLOAD_SIZE, 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
+            int len = recvfrom(sock, udp_rx_buf, sizeof(udp_buf_t), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
 #if 0
     	    count = (count + 1) & 0x07ff; // 4096
@@ -366,12 +366,13 @@ void udp_rx_task(void *args) {
             p++;
 #endif
 
-            if (len == UDP_PAYLOAD_SIZE) {
+            if (len == sizeof(udp_buf_t)) {
                 // assume success. verify checksum 
-                memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
-                mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, UDP_BUF_SIZE/4); 
+                checksum = udp_rx_buf->checksum; 
+                // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
+                mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 // if (checksum == mychecksum) {
-                    circular_buf_put(cbuf, udp_rx_buf);            // this will copy only elem_size bytes, i.e. ignore checksum and switches
+                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);            // this will copy only elem_size bytes, i.e. ignore checksum and switches
 #if 0
             	    if (count == 0) {               // hier müsste man einen extra counter machen.
             	        ESP_LOGI(RX_TAG, "2048 packets processed"); 

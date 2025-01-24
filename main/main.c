@@ -173,7 +173,7 @@ void app_main(void) {
         // xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
     
         // create UDP Tx task
-        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 12, &udp_tx_task_handle);
+        xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 18, &udp_tx_task_handle);
 
         // xTaskCreate(monitor_task, "monitor_task", 4096, &sender, 3, NULL);
 

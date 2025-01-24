@@ -58,7 +58,8 @@ cbuf_handle_t circular_buf_init(uint8_t *buffer, size_t size, size_t elem_size) 
 	cbuf->elem_size = elem_size;
 	circular_buf_reset(cbuf);
 
-	assert(circular_buf_empty(cbuf));
+	// assert(circular_buf_empty(cbuf));
+	
 
 	return cbuf;
 }

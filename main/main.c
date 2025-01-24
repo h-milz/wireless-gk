@@ -166,9 +166,9 @@ void app_main(void) {
         i2s_channel_init_tdm_mode(i2s_rx_handle, &i2s_rx_cfg);
 #endif        
 
-#ifdef LATENCY_MEAS            
-        xTaskCreate(latency_meas_task, "latency_meas_task", 4096, NULL, 5, NULL);
-#else        
+// #ifdef LATENCY_MEAS            
+        // xTaskCreate(latency_meas_task, "latency_meas_task", 4096, NULL, 5, NULL);
+// #else        
         // create I2S Rx task
         // xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
     
@@ -188,7 +188,7 @@ void app_main(void) {
 
         // enable channel
         i2s_channel_enable(i2s_rx_handle);
-#endif /* LATENCY_MEAS*/        
+// #endif /* LATENCY_MEAS*/        
         
     } else {   // receiver
         // initialize GPIO pins

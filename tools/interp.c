@@ -8,6 +8,11 @@
  * so we use frame(n-1) and frame2 as the anchor points and interpolate the 3 frames in between, slot0 - slot6
  * using 5 frames with 4 gaps in between allows us to do simple integer math. 
  * we ignore slot7 because it contains GKVOL which is not critical.
+ *
+ * Mathematically, this method is suboptimal because although it will remove discontinuities, 
+ * the chosen anchor points will most likely not be differentiable, i.e. bends.
+ * However, the spectral content of these spots will cause much less audible glitches than real discontinuities.
+ * At the end of the day, it's a tradeoff caused by the limited compute time. 
  */ 
 
 

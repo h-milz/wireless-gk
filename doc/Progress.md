@@ -1,5 +1,14 @@
 # Progress 
 
+2025-01-25
+
+ * changing the ring buffer architecture to insert incoming UDP packets by sequence number (i.e., send time) instead of arrival time. This should help a continuous packet flow. 
+ * interpolation tests - if a packet goes lost, we need to duplicate the previous ring buffer element. Interpolation should help to prevent discontinuities and hence glitches. 
+
+2025-01-24
+
+ * comprehensive UDP latency testing on the current architecture. Plain UDP packet latency is about 540 +/- 200 µs. Occasionally, packets still arrive late (> 1400 µs) and cause glitches. In these cases, the simple ring buffer runs dry. 
+
 2025-01-23
 
  * added UDP Rx ring buffer, lots of experimenting and optimization. Rx-Tx work now with very few glitches probably still caused by UDP jitter. 

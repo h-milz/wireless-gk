@@ -339,7 +339,8 @@ void udp_tx_task(void *args) {
     int i, j; 
     uint32_t count = 0; 
     uint32_t checksum; 
-
+    uint32_t sequence_number = 0;
+    
     dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);
     dest_addr.sin_family = AF_INET;
     dest_addr.sin_port = htons(PORT);
@@ -388,7 +389,7 @@ void udp_tx_task(void *args) {
             // insert XOR checksum after the sample data
             // checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
             udp_tx_buf->checksum = calculate_checksum((uint32_t *)udp_tx_buf, NFRAMES * sizeof(udp_frame_t) / 4);
-            udp_tx_buf->timestamp = get_time_us_in_isr();
+            udp_tx_buf->sequence_number = sequence_number++; 
             // TODO insert S1, S2 in the last byte
             
             // UDP latency measurement

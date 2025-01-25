@@ -281,15 +281,12 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     _log[p].size = event->size; 
     p++;
 #endif
-    // fetch cbuf tail pointer
-    i2sbuf = circular_buf_get(cbuf); 
-    if (i2sbuf == NULL ) {
-        nullframes++; 
-        return false;      // this will be the case right after start, when the cbuf is still empty
-    }  
+    // wait for the ringbuf to be filled
     if (stopped) {       
         return false;
     }
+    // fetch cbuf tail pointer
+    i2sbuf = circular_buf_get(cbuf); 
     // unpack and write to most recent free dma buffer
     // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
     for (i=0; i<NFRAMES; i++) {
@@ -324,7 +321,7 @@ void udp_rx_task(void *args) {
 #endif    
     uint32_t numpackets = 0x07ff; 
     uint32_t initial_count = 0;
-    uint32_t min_count = NUM_UDP_BUFS / 2; 
+    uint32_t min_count = NUM_UDP_BUFS + RING_BUF_OFFSET;  
 
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
@@ -403,7 +400,7 @@ void udp_rx_task(void *args) {
                 // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 if (checksum == mychecksum) {
-                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);  // this will copy only elem_size bytes, i.e. ignore extra data
+                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);
                     // fill buffer with MAX/2 packets
                     if (stopped) {
                         initial_count++;

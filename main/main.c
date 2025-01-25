@@ -154,7 +154,7 @@ void app_main(void) {
         // create udp buffers explicitly in RAM
         // we use only one in the sender. 
         udp_tx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
-        udp_tx_buf->timestamp = 0;
+        udp_tx_buf->sequence_number = 0;
         udp_tx_buf->switches = 0;
         
         // set up I2S receive channel on the Sender
@@ -211,7 +211,7 @@ void app_main(void) {
         ringbuf = (udp_frame_t *)heap_caps_calloc(NFRAMES * NUM_UDP_BUFS, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         // and the UDP receive buffer
         udp_rx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
-        udp_rx_buf->timestamp = 0;
+        udp_tx_buf->sequence_number = 0;
         udp_rx_buf->switches = 0;
             
         // set up I2S send channel on the Receiver

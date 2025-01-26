@@ -15,6 +15,18 @@
  * At the end of the day, it's a tradeoff caused by the limited compute time. 
  *
  * Please check the Python demos in fft2.py and fft3.py in this directory to see the effect. 
+ * If you run the fft4.py script a couple of times in a row with smooting set to True or False, you can see 
+ * different spectral noise each time.
+ * without smooting, the noise floor is not much different from the floor without smooting at 
+ * higher frequencies, about 90 dB below the signal. 
+ * but there is a big difference at lower frequencies  but the noise floor is in any case ~90 dB below the actual signal. 
+ * 
+ * In fft6.py a guitar string signal is simulated using a base wave and 12 harmonics with a 1/1.2 drop-off. You 
+ * can play with the number of jumps per second >= 2 and the random jump_amplitude 0.0 .. 1.0.  
+ * The result is similar: without smooting, we get a random low frequency noise that will be hard 
+ * to filter on the analog side, except maybe a sharp high pass at, say, 50 Hz. 
+ * Whereas even with only 3-step smoothing, 10 jumps per second and a high jump amplitude, the spectral noise is 
+ * by and large invisible. 
  */ 
 
 
@@ -25,6 +37,7 @@
 #include <sys/time.h>
 
 #define NUM_SLOTS_I2S 8
+#define NUM_SLOTS_UDP 8
 #define NFRAMES 5
 
 
@@ -32,6 +45,22 @@
 typedef struct {
     int slot[NUM_SLOTS_I2S]; 
 } i2s_frame_t;
+
+
+typedef struct {
+    uint8_t byte[3]; 
+} int24_t;
+
+union int24_32 {
+    uint8_t int24[4];  // 4 bytes for int24 representation, byte 0 will be 0
+    int32_t int32;     // 32-bit signed integer representation
+};
+
+typedef struct {
+    int slot[NUM_SLOTS_UDP]; 
+} udp_frame_t;
+
+
 
 
 i2s_frame_t frame[NFRAMES]; 

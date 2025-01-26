@@ -13,6 +13,11 @@
  * the chosen anchor points will most likely not be differentiable, i.e. bends.
  * However, the spectral content of these spots will cause much less audible glitches than real discontinuities.
  * At the end of the day, it's a tradeoff caused by the limited compute time. 
+ *
+ * However, this code is unlikely to be used in wireless-GK because it would require changing the ring buffer 
+ * structure to keep the unpacked data. Doing math with 3 byte int is cumbersome. 
+ * But then, small jumps like this will more easily be smoothened by the low pass filter at the DAC output, 
+ * which is required anyway.  
  */ 
 
 

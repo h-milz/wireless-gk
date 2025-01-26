@@ -1,5 +1,9 @@
 # Progress 
 
+2025-01-26
+
+ * comprehensive simulation of the influence of interpolation. Please see the tools/interp.c and the tools/fft*.py files for clues. In a nutshell: even with a short interpolation over just 3 samples the effect of discontinuities on the spectrum can efficiently be mitigated. So that's the way to go. Implementation and live testing is next. Finding the sweet spot that also satisfies latency expectations. 
+
 2025-01-25
 
  * changing the ring buffer architecture to insert incoming UDP packets by sequence number (i.e., send time) instead of arrival time. This should help a continuous packet flow. 

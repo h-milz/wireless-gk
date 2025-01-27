@@ -260,7 +260,6 @@ void init_wifi_rx(bool setup_requested) {
 
 }
 
-DRAM_ATTR uint32_t nullframes = 0; 
 
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
@@ -281,7 +280,6 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     // fetch cbuf tail pointer
     i2sbuf = ring_buf_get(); 
     if (i2sbuf == NULL) {               // wait for the ringbuf to be filled
-        nullframes++; 
         return false;
     }        
     // write data to most recently free'd DMA buffer
@@ -391,7 +389,7 @@ void udp_rx_task(void *args) {
 #if 1
             	    count_processed = (count_processed + 1) & numpackets;
             	    if (count_processed == 0) {               // hier müsste man einen extra counter machen.
-            	        ESP_LOGI(RX_TAG, "%lu packets processed, %lu nullframes", numpackets+1, nullframes); 
+            	        ESP_LOGI(RX_TAG, "%lu packets processed", numpackets+1); 
 #ifdef LATENCY_MEAS
             	        variance = S / (count - 1);
             	        stddev = sqrt(variance);

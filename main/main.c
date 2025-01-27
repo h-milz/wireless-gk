@@ -207,7 +207,7 @@ void app_main(void) {
         vTaskDelay(200/portTICK_PERIOD_MS);
         
         // initialize i2s ring buffer
-        if (!ringbuf_init()) {              // This Should Not Happen[TM]
+        if (!ring_buf_init()) {              // This Should Not Happen[TM]
             vTaskDelete(NULL); 
         }
         // and the UDP receive buffer
@@ -238,7 +238,7 @@ void app_main(void) {
 
         i2s_channel_enable(i2s_tx_handle);
         ESP_LOGI(TAG, "sizeof(udp_rx_buf) = %d", sizeof(udp_buf_t));
-        ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ringbuf_size());
+        ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ring_buf_size());
     }
     
     ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));

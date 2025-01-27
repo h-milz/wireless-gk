@@ -22,7 +22,7 @@
 // but the ring buffer is read sequentially after all, so ... 
 
 #include "wireless_gk.h"
-#include "ring_buf.h"
+// #include "ringbuf.h"
 
 // using uint32_t for small values looks like a waste of memory but 
 // a) we have plenty of RAM and 
@@ -35,7 +35,7 @@ static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
 static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
 static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
-DRAM ATTR static bool running = false;              // will be used in an ISR context
+DRAM_ATTR static bool running = false;              // will be used in an ISR context
 
 
 bool ring_buf_init(void) {
@@ -59,7 +59,7 @@ size_t ring_buf_size(void) {
 }
 
 
-void ring_buf_put(uint8_t *data) {
+void ring_buf_put(udp_buf_t *udp_buf) {
     int i, j; 
     write_idx = udp_buf->sequence_number & idx_mask;   // no modulo, no if-else
 
@@ -71,7 +71,7 @@ void ring_buf_put(uint8_t *data) {
             // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
             // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
             memcpy ((uint8_t *)ring_buf[write_idx] + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                    data + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                    (uint8_t* )udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
                     SLOT_SIZE_UDP); 
         }
     }

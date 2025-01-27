@@ -323,9 +323,6 @@ void udp_rx_task(void *args) {
     timeout.tv_sec = 10;       // 1 second timeout is plenty! 
     timeout.tv_usec = 0;
 
-    // initialize circular buffer
-    cbuf = circular_buf_init((uint8_t *)ringbuf, NUM_RINGBUF_ELEMS, NFRAMES * sizeof(udp_frame_t)); 
-    
     while (1) {
 
         int sock = socket(AF_INET, SOCK_DGRAM, IPPROTO_IP);
@@ -390,7 +387,7 @@ void udp_rx_task(void *args) {
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 if (checksum == mychecksum) {
                     // ESP_LOGW(RX_TAG, "checksum ok");
-                    ring_buf_put((uint8_t *)udp_rx_buf);
+                    ring_buf_put(udp_rx_buf);
 #if 1
             	    count_processed = (count_processed + 1) & numpackets;
             	    if (count_processed == 0) {               // hier müsste man einen extra counter machen.

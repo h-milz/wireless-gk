@@ -45,7 +45,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "lwip/errno.h"
-#include "ringbuf.h" 
+// #include "ringbuf.h" 
 
 
 // TODO remove for production compilation 
@@ -270,6 +270,11 @@ typedef struct {
     uint32_t switches;
 } udp_buf_t;
 
+bool ring_buf_init(void);
+size_t ring_buf_size(void); 
+void ring_buf_put(udp_buf_t *udp_buf); 
+uint8_t *ring_buf_get(void);
+
 
 // TODO: these can be privatized too. 
 extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
@@ -302,7 +307,7 @@ bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *us
 void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
 int find_free_channel(void);
-static cbuf_handle_t cbuf; 
+
 
 // main stuff
 typedef struct { 

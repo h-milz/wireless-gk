@@ -18,7 +18,6 @@
 */
 
 #include "wireless_gk.h"
-#include "cbuf.h"
 
 #define LED_PIN                 GPIO_NUM_10             // 
 #define SETUP_PIN               GPIO_NUM_14             // take the one that is nearest to the push button
@@ -36,8 +35,6 @@ TaskHandle_t i2s_tx_task_handle = NULL;
 TaskHandle_t udp_rx_task_handle = NULL; 
 
 static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
-
-DRAM_ATTR static cbuf_handle_t cbuf; 
 
 #ifdef RX_DEBUG
 static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", "before recvfrom", "after recvfrom", "end i2s_tx loop" }; 
@@ -277,7 +274,7 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     p++;
 #endif
 
-    // fetch cbuf tail pointer
+    // fetch ringbuf tail pointer
     i2sbuf = ring_buf_get(); 
     if (i2sbuf == NULL) {               // wait for the ringbuf to be filled
         return false;

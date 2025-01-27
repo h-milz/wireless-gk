@@ -127,25 +127,25 @@ extern volatile log_t _log[];
  */ 
 #define NFRAMES                 60                      // the number of frames we want to send in a datagram 
 #define NUM_SLOTS_I2S           2                       // number of channels in one sample, 2 for stereo, 8 for 8-channel audio
-#define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each
+#define SLOT_SIZE_I2S           4                       // I2S has slots with 4 byte each. The data type is int. 
 #define NUM_SLOTS_UDP           8                       // we always send 8 slot frames
-#define SLOT_SIZE_UDP           3                       // UDP has 3-byte samples.
-#define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // 
+#define SLOT_SIZE_UDP           3                       // UDP format has 3-byte samples.
+#define SLOT_BIT_WIDTH          SLOT_SIZE_I2S * 8       // bits per slot
 #define NUM_RX_DMA_BUFS         4                       // Number of DMA buffers in the sender.  RX is here I2S RX
 #define NUM_TX_DMA_BUFS         2                       // the receiver only uses 2. TX is here I2S TX
 
-#define DMA_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each DMA buffer
+#define I2S_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each I2S or DMA buffer
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
-#define NUM_UDP_BUFS            4                       // this should probably be renamed NUM_RINGBUF_ELEMENTS and needs to be a power of 2. 
-#define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 12       // 
-#define RING_BUF_OFFSET         2                       // when do we start to shuffle data to I2S. 
+#define NUM_RINGBUF_ELEMS       4                       // this should probably be renamed NUM_RINGBUF_ELEMENTS and needs to be a power of 2. 
+// #define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 16       // 
+#define RINGBUF_OFFSET          2                       // when do we start to shuffle data to I2S. 
 
 #define NUM_I2S_BUFS            4 
-#define I2S_CBUF_SIZE           DMA_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size
+// #define I2S_CBUF_SIZE           I2S_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size 
 
 #define I2S_NUM                 I2S_NUM_AUTO
-#define SAMPLE_RATE             44100                   // 44100
+#define SAMPLE_RATE             44100                   // 48000 should works as well, or anything less
 
 
 /* ***************************************************************
@@ -254,17 +254,18 @@ typedef struct {
     uint8_t slot[NUM_SLOTS_UDP * SLOT_SIZE_UDP];
 } udp_frame_t;
 
+#define WITH_TIMESTAMP
 typedef struct {
     udp_frame_t frame[NFRAMES];
     uint32_t checksum;
     uint32_t sequence_number;
+#ifdef WITH_TIMESTAMP    
+    uint32_t timestamp; 
+#endif    
     uint32_t switches;
 } udp_buf_t;
 
-// static udp_buf_t udp_tx_buf;
-// static udp_buf_t udp_rx_buf;
-// static udp_frame_t ringbuf[NFRAMES * NUM_UDP_BUFS];
- 
+
 extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 extern udp_frame_t *ringbuf;
 

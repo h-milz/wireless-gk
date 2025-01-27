@@ -208,7 +208,7 @@ void app_main(void) {
         vTaskDelay(200/portTICK_PERIOD_MS);
         
         // create udp ring buffer explicitly in DRAM
-        ringbuf = (udp_frame_t *)heap_caps_calloc(NFRAMES * NUM_UDP_BUFS, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        ringbuf = (udp_frame_t *)heap_caps_calloc(NFRAMES * NUM_RINGBUF_ELEMS, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         // and the UDP receive buffer
         udp_rx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
         udp_tx_buf->sequence_number = 0;

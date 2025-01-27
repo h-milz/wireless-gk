@@ -45,7 +45,7 @@
 #include "lwip/sockets.h"
 #include "lwip/sys.h"
 #include "lwip/errno.h"
-#include "cbuf.h" 
+#include "ringbuf.h" 
 
 
 // TODO remove for production compilation 
@@ -247,8 +247,13 @@ static i2s_tdm_config_t i2s_tx_cfg = {
  * ***************************************************************/
  
 typedef struct {
-    uint8_t slot[NUM_SLOTS_I2S * SLOT_SIZE_I2S];
+    int slot[NUM_SLOTS_I2S];
 } i2s_frame_t;
+
+typedef struct {
+    i2s_frame_t frame[NFRAMES];
+} i2s_buf_t;     
+
 
 typedef struct {
     uint8_t slot[NUM_SLOTS_UDP * SLOT_SIZE_UDP];
@@ -266,8 +271,9 @@ typedef struct {
 } udp_buf_t;
 
 
+// TODO: these can be privatized too. 
 extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
-extern udp_frame_t *ringbuf;
+// extern i2s_buf_t *ringbuf[];
 
 
 /* ***************************************************************

@@ -276,11 +276,10 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
 
     // fetch ringbuf tail pointer
     i2sbuf = ring_buf_get(); 
-    if (i2sbuf == NULL) {               // wait for the ringbuf to be filled
-        return false;
+    if (i2sbuf != NULL) {               // wait for the ringbuf to be filled
+        // write data to most recently free'd DMA buffer
+        memcpy(dmabuf, i2sbuf, size); 
     }        
-    // write data to most recently free'd DMA buffer
-    memcpy(dmabuf, i2sbuf, size); 
     return false; 
 }    
 
@@ -360,7 +359,7 @@ void udp_rx_task(void *args) {
     	    S = S + delta * ((float)diff - M); 
 #endif
 
-#if 1
+#if 0
     	    count_received = (count_received + 1) & numpackets; // 4096
     	    if (count_received == 0) {
     	        ESP_LOGI(RX_TAG, "%lu packets received, last len = %d ", numpackets+1, len); 
@@ -383,7 +382,7 @@ void udp_rx_task(void *args) {
                 if (checksum == mychecksum) {
                     // ESP_LOGW(RX_TAG, "checksum ok");
                     ring_buf_put(udp_rx_buf);
-#if 1
+#if 0
             	    count_processed = (count_processed + 1) & numpackets;
             	    if (count_processed == 0) {               // hier müsste man einen extra counter machen.
             	        ESP_LOGI(RX_TAG, "%lu packets processed", numpackets+1); 

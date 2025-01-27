@@ -22,7 +22,6 @@
 // but the ring buffer is read sequentially after all, so ... 
 
 #include "wireless_gk.h"
-// #include "ringbuf.h"
 
 // using uint32_t for small values looks like a waste of memory but 
 // a) we have plenty of RAM and 

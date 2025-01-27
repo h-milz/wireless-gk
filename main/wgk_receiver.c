@@ -261,19 +261,15 @@ void init_wifi_rx(bool setup_requested) {
 }
 
 DRAM_ATTR uint32_t nullframes = 0; 
-DRAM_ATTR bool stopped = true;
 
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     uint8_t *i2sbuf, *dmabuf;
-    // size_t res; // , size;
-    int i, j; 
+    size_t size;
         
-    // we pass the *dma_buf and size in a struct, by reference. 
-    // static dma_params_t dma_params;
-    // dma_params.dma_buf = (uint8_t *)event->dma_buf;
     dmabuf = (uint8_t *)event->dma_buf;
-    // size = event->size;    // unused so far
+    size = event->size;
+
 #ifdef RX_DEBUG
     _log[p].loc = 0;
     _log[p].time = get_time_us_in_isr();
@@ -281,27 +277,15 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     _log[p].size = event->size; 
     p++;
 #endif
-    // wait for the ringbuf to be filled
-    if (stopped) {       
-        return false;
-    }
+
     // fetch cbuf tail pointer
-    i2sbuf = circular_buf_get(cbuf); 
-    if (i2sbuf == NULL) {               // This Should Not Happen [TM]
+    i2sbuf = ring_buf_get(); 
+    if (i2sbuf == NULL) {               // wait for the ringbuf to be filled
         nullframes++; 
         return false;
     }        
-    // unpack and write to most recent free dma buffer
-    // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
-    for (i=0; i<NFRAMES; i++) {
-        for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-            // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
-            // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-             memcpy (dmabuf + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                     i2sbuf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                     SLOT_SIZE_UDP); 
-        }
-    }
+    // write data to most recently free'd DMA buffer
+    memcpy(dmabuf, i2sbuf, size); 
     return false; 
 }    
 
@@ -324,8 +308,8 @@ void udp_rx_task(void *args) {
     uint32_t maxdiff = 0;
 #endif    
     uint32_t numpackets = 0x07ff; 
-    uint32_t initial_count = 0;
-    uint32_t min_count = NUM_RINGBUF_ELEMS + RINGBUF_OFFSET;  
+    // uint32_t initial_count = 0;
+    // uint32_t min_count = NUM_RINGBUF_ELEMS + RINGBUF_OFFSET;  
 
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
@@ -406,16 +390,7 @@ void udp_rx_task(void *args) {
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 if (checksum == mychecksum) {
                     // ESP_LOGW(RX_TAG, "checksum ok");
-                    circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);
-                    // fill buffer with MAX/2 packets
-                    if (stopped) {
-                        initial_count++;
-                        // ESP_LOGW(RX_TAG, "initial_count = %lu", initial_count); 
-                        if (initial_count >= min_count) {
-                            stopped = false;
-                            ESP_LOGW(RX_TAG, "running"); 
-                        } 
-                    }
+                    ring_buf_put((uint8_t *)udp_rx_buf);
 #if 1
             	    count_processed = (count_processed + 1) & numpackets;
             	    if (count_processed == 0) {               // hier müsste man einen extra counter machen.

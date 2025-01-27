@@ -266,7 +266,7 @@ DRAM_ATTR bool stopped = true;
 // on_sent callback, used to determine the pointer to the most recently emptied dma buffer
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     uint8_t *i2sbuf, *dmabuf;
-    size_t res; // , size;
+    // size_t res; // , size;
     int i, j; 
         
     // we pass the *dma_buf and size in a struct, by reference. 
@@ -287,6 +287,10 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     }
     // fetch cbuf tail pointer
     i2sbuf = circular_buf_get(cbuf); 
+    if (i2sbuf == NULL) {               // This Should Not Happen [TM]
+        nullframes++; 
+        return false;
+    }        
     // unpack and write to most recent free dma buffer
     // memset (dmabuf, 0, size);     // because .auto_clear_after_cb = true is set. 
     for (i=0; i<NFRAMES; i++) {
@@ -395,15 +399,18 @@ void udp_rx_task(void *args) {
 #endif
 
             if (len == sizeof(udp_buf_t)) {
+                // ESP_LOGW(RX_TAG, "len ok");
                 // assume success. verify checksum 
                 checksum = udp_rx_buf->checksum; 
                 // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
                 mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
                 if (checksum == mychecksum) {
+                    // ESP_LOGW(RX_TAG, "checksum ok");
                     circular_buf_put(cbuf, (uint8_t *)udp_rx_buf);
                     // fill buffer with MAX/2 packets
                     if (stopped) {
                         initial_count++;
+                        // ESP_LOGW(RX_TAG, "initial_count = %lu", initial_count); 
                         if (initial_count >= min_count) {
                             stopped = false;
                             ESP_LOGW(RX_TAG, "running"); 

@@ -28,7 +28,6 @@ EventGroupHandle_t s_wifi_event_group;
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
 udp_buf_t *udp_tx_buf, *udp_rx_buf;
-// i2s_buf_t *ringbuf[NUM_RINGBUF_ELEMS];
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 

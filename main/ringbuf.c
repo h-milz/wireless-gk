@@ -111,7 +111,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     // better: set bool slip_by_one=true and evaluate this in ring_buf_get
     // i.e. return ringbuf[read_idx-1] and do not increase read_idx. 
     // but it could happen that things normalize again and then we have effectively increased the latency by one packet. 
-    if (write_idx >= (read_idx + 1) & idx_mask) {       // case #1: all's normal (+2) or late (+1). 
+    if (write_idx >= ((read_idx + 1) & idx_mask)) {       // case #1: all's normal (+2) or late (+1). 
         // unpack, done. 
         for (i=0; i<NFRAMES; i++) {
             for (j=NUM_SLOTS_I2S-1; j>=0; j--) {

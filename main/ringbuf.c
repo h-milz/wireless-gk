@@ -27,7 +27,7 @@
 // a) we have plenty of RAM and 
 // b) ESP32 cannot handle non-32bit-aligned variables like uint8_t very well
 // so using a 32-bit variable is in fact more run-time efficient 
-DRAM_ATTR static uint32_t read_idx = 0;  
+DRAM_ATTR static uint32_t read_idx = 0;        // until the buffer is filled. 
 static uint32_t write_idx;             
 static uint32_t idx_mask; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
@@ -102,6 +102,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     bool need_smoothing = false; 
     
     write_idx = udp_buf->sequence_number & idx_mask;   // no modulo, no if-else
+    // ESP_LOGI(TAG, "write_idx = %d", write_idx); 
     
     // case decisions
     // TODO: we could try to adjust the read_idx offset if too many late packets are detected over time. 
@@ -112,7 +113,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     // better: set bool slip_by_one=true and evaluate this in ring_buf_get
     // i.e. return ringbuf[read_idx-1] and do not increase read_idx. 
     // but it could happen that things normalize again and then we have effectively increased the latency by one packet. 
-    if (write_idx >= ((read_idx + 1) & idx_mask)) {       // case #1: all's normal (+2) or late (+1). 
+    if ((write_idx >= ((read_idx + 1) & idx_mask)) || !running) {       // case #1: all's normal (+2) or late (+1). 
         // unpack, done. 
         for (i=0; i<NFRAMES; i++) {
             for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
@@ -124,21 +125,24 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             }
         }
         if (!running) {
-            slot_mask |= 1 << write_idx;                // take note of the filled slot
+            slot_mask |= (1 << write_idx);                // take note of the filled slot
         }
         // TODO: can it happen that a correctly inserted packet does not match the previous one? 
         // if we had case #2 before, the current packet _should_ be the next regular one. 
         // otherwise we should smoothe here as well. 
+/*
     } else if (write_idx == read_idx) {                 // case #2: really late packet. drop, duplicate, and smoothe 
         // duplicate the packet at the current read position to the position one ahead
         uint32_t next_idx = (write_idx+1) & idx_mask; 
         memcpy ((uint8_t *)ring_buf[next_idx], 
                 (uint8_t *)ring_buf[write_idx],
                 sizeof(i2s_buf_t)); 
-        smoothe (ring_buf[write_idx], ring_buf[next_idx], SMOOTHE_LONG); 
+        smoothe (ring_buf[write_idx], ring_buf[next_idx], SMOOTHE_SHORT); 
+        write_idx = next_idx; 
         if (!running) {
-            slot_mask |= 1 << next_idx;                 // take note of the filled slot
+            slot_mask |= (1 << write_idx);                 // take note of the filled slot
         }
+*/
     } else {                                            // case #3: really really late, we drop it altogether
     }
         
@@ -147,9 +151,10 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     // this makes sure that there is actual content in each of them.
     // then we set read_idx RINGBUF_OFFSET slots behind the last write_idx
     if (!running) {
+        // ESP_LOGI(TAG, "running = 0x%08x", slot_mask & 0x000000ff); 
         if (slot_mask == all_mask) {    // all bits are set so we're full
             running = true;
-            read_idx = (write_idx - RINGBUF_OFFSET) & idx_mask; 
+            read_idx = (write_idx + NUM_RINGBUF_ELEMS - RINGBUF_OFFSET) & idx_mask; 
             ESP_LOGI(TAG, "running"); 
         }
     }

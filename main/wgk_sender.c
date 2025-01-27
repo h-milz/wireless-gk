@@ -329,7 +329,7 @@ void udp_tx_task(void *args) {
         	    } else if (errno == 118) {
         	        ESP_LOGE(TX_TAG, "network not connected, errno %d", errno);
         	        // BLINK! 
-        	        vTaskDelete(NULL);
+        	        vTaskDelay(500/portTICK_PERIOD_MS); // gracefully try again. 
                     break;
         	    } else {
         	        ESP_LOGE(TX_TAG, "lwip_sendto fail. %d", errno);

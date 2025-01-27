@@ -36,6 +36,44 @@ static uint32_t slot_mask = 0;
 static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
 DRAM_ATTR static bool running = false;              // will be used in an ISR context
 
+#define SMOOTHE_SHORT 3
+#define SMOOTHE_LONG 5
+static i2s_frame_t *frame[SMOOTHE_LONG];    // just in case, works also when we use SHORT. 
+
+
+// smoothe does a linear interpolation to remove discontinuities
+// generated when we duplicate a packet to replace a missing packet
+// see tools/interp.c for a discussion 
+static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode) {
+    int step, i, j; 
+    
+    if (smooth_mode == SMOOTHE_LONG) {
+        frame[0] = (i2s_frame_t *) (buf1 + (NFRAMES-2)*sizeof(i2s_frame_t));   // these are the two last frames of the previous packet
+        frame[1] = (i2s_frame_t *) (buf1 + (NFRAMES-1)*sizeof(i2s_frame_t));
+        frame[2] = (i2s_frame_t *) (buf2);
+        frame[3] = (i2s_frame_t *) (buf2 + sizeof(i2s_frame_t));
+        frame[4] = (i2s_frame_t *) (buf2 + 2 * sizeof(i2s_frame_t));
+        
+        for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL! 
+            step = (frame[4]->slot[i] - frame[0]->slot[i]) / 4; 
+            for (j=0; j<3; j++) {
+                frame[j+1]->slot[i] = frame[j]->slot[i] + step;    
+            }
+        }
+    } else if (smooth_mode == SMOOTHE_SHORT) {
+        frame[0] = (i2s_frame_t *) (buf1 + (NFRAMES-1)*sizeof(i2s_frame_t));
+        frame[1] = (i2s_frame_t *) (buf2);
+        frame[2] = (i2s_frame_t *) (buf2 + sizeof(i2s_frame_t));
+        
+        for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL! 
+            step = (frame[2]->slot[i] - frame[0]->slot[i]) / 2; 
+            frame[1]->slot[i] = frame[0]->slot[i] + step;    
+        }
+    } else {
+        // oops, this should not happen
+    }
+}
+
 
 bool ring_buf_init(void) {
     int i; 
@@ -77,6 +115,8 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 
     
     // here we will call smoothing if required. 
+    
+    smoothe (ring_buf[(write_idx-1) & idx_mask], ring_buf[write_idx], SMOOTHE_LONG); 
     
     // make sure the ring buffer gets filled before ring_buf_get returns != NULL
     // instead of counting we set bits corresponding to the slot numbers and wait until all bits are set

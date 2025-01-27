@@ -275,7 +275,6 @@ size_t ring_buf_size(void);
 void ring_buf_put(udp_buf_t *udp_buf); 
 uint8_t *ring_buf_get(void);
 
-
 // TODO: these can be privatized too. 
 extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 

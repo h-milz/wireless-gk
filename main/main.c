@@ -28,7 +28,7 @@ EventGroupHandle_t s_wifi_event_group;
 // static volatile uint32_t sample_count = 0; // , txcount = 0, rxcount = 0, losses = 0, loopcount = 0, overall_losses = 0, overall_packets = 0;
 
 udp_buf_t *udp_tx_buf, *udp_rx_buf;
-udp_frame_t *ringbuf;
+// i2s_buf_t *ringbuf[NUM_RINGBUF_ELEMS];
 
 #if (defined RX_DEBUG || defined TX_DEBUG)
 DRAM_ATTR volatile int p = 0; 
@@ -112,6 +112,7 @@ void app_main(void) {
     bool sender = false; 
     bool creds_available = false;
     bool setup_requested = false;
+    int i; 
     
     //Initialize NVS
     esp_err_t ret = nvs_flash_init();
@@ -151,11 +152,8 @@ void app_main(void) {
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
-        // create udp buffers explicitly in RAM
-        // we use only one in the sender. 
+        // create udp send buffer explicitly in RAM
         udp_tx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
-        // udp_tx_buf->sequence_number = 0;
-        // udp_tx_buf->switches = 0;
         
         // set up I2S receive channel on the Sender
         i2s_new_channel(&i2s_rx_chan_cfg, NULL, &i2s_rx_handle);
@@ -189,6 +187,7 @@ void app_main(void) {
         // enable channel
         i2s_channel_enable(i2s_rx_handle);
 // #endif /* LATENCY_MEAS*/        
+        ESP_LOGI(TAG, "sizeof(udp_tx_buf) = %d", sizeof(udp_buf_t));
         
     } else {   // receiver
         // initialize GPIO pins
@@ -207,12 +206,12 @@ void app_main(void) {
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
-        // create udp ring buffer explicitly in DRAM
-        ringbuf = (udp_frame_t *)heap_caps_calloc(NFRAMES * NUM_RINGBUF_ELEMS, sizeof(udp_frame_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        // initialize i2s ring buffer
+        if (!ringbuf_init()) {              // This Should Not Happen[TM]
+            vTaskDelete(NULL); 
+        }
         // and the UDP receive buffer
         udp_rx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
-        // udp_rx_buf->sequence_number = 0;
-        // udp_rx_buf->switches = 0;
             
         // set up I2S send channel on the Receiver
         i2s_new_channel(&i2s_tx_chan_cfg, &i2s_tx_handle, NULL);
@@ -238,17 +237,18 @@ void app_main(void) {
         i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
+        ESP_LOGI(TAG, "sizeof(udp_rx_buf) = %d", sizeof(udp_buf_t));
+        ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ringbuf_size());
     }
     
-    ESP_LOGI(TAG, "udp_buf_t = %d", sizeof(udp_buf_t));
-    ESP_LOGI(TAG, "ringbuf size = %d", NFRAMES * NUM_RINGBUF_ELEMS * sizeof(udp_frame_t));
     ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
     ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
 
-    
+/*    
     while (1) {
         vTaskDelay(1000/ portTICK_PERIOD_MS);
     }
+*/    
 }
 
 

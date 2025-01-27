@@ -321,7 +321,7 @@ void udp_rx_task(void *args) {
 #endif    
     uint32_t numpackets = 0x07ff; 
     uint32_t initial_count = 0;
-    uint32_t min_count = NUM_UDP_BUFS + RING_BUF_OFFSET;  
+    uint32_t min_count = NUM_RINGBUF_ELEMS + RINGBUF_OFFSET;  
 
     struct sockaddr_storage source_addr;
     socklen_t socklen = sizeof(source_addr);
@@ -336,7 +336,7 @@ void udp_rx_task(void *args) {
     timeout.tv_usec = 0;
 
     // initialize circular buffer
-    cbuf = circular_buf_init((uint8_t *)ringbuf, NUM_UDP_BUFS, NFRAMES * sizeof(udp_frame_t)); 
+    cbuf = circular_buf_init((uint8_t *)ringbuf, NUM_RINGBUF_ELEMS, NFRAMES * sizeof(udp_frame_t)); 
     
     while (1) {
 

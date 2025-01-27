@@ -22,10 +22,5 @@
 
 #include "wireless_gk.h"
 
-bool ring_buf_init(void);
-size_t ring_buf_size(void); 
-void ring_buf_put(udp_buf_t *udp_buf); 
-IRAM_ATTR uint8_t *ring_buf_get(void);
-
 #endif // _RINGBUF_H 
 

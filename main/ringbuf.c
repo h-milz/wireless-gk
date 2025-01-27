@@ -46,24 +46,24 @@ static i2s_frame_t *frame[SMOOTHE_LONG];    // just in case, works also when we 
 // see tools/interp.c for a discussion 
 static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode) {
     int step, i, j; 
-    
+
     if (smooth_mode == SMOOTHE_LONG) {
-        frame[0] = (i2s_frame_t *) (buf1 + (NFRAMES-2)*sizeof(i2s_frame_t));   // these are the two last frames of the previous packet
-        frame[1] = (i2s_frame_t *) (buf1 + (NFRAMES-1)*sizeof(i2s_frame_t));
-        frame[2] = (i2s_frame_t *) (buf2);
-        frame[3] = (i2s_frame_t *) (buf2 + sizeof(i2s_frame_t));
-        frame[4] = (i2s_frame_t *) (buf2 + 2 * sizeof(i2s_frame_t));
+        frame[0] = (i2s_frame_t *) buf1 + (NFRAMES-2)*sizeof(i2s_frame_t);   // these are the two last frames of the previous packet
+        frame[1] = (i2s_frame_t *) buf1 + (NFRAMES-1)*sizeof(i2s_frame_t);
+        frame[2] = (i2s_frame_t *) buf2;
+        frame[3] = (i2s_frame_t *) buf2 + sizeof(i2s_frame_t);
+        frame[4] = (i2s_frame_t *) buf2 + 2 * sizeof(i2s_frame_t);
         
-        for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL! 
+        for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL!
             step = (frame[4]->slot[i] - frame[0]->slot[i]) / 4; 
             for (j=0; j<3; j++) {
                 frame[j+1]->slot[i] = frame[j]->slot[i] + step;    
             }
         }
     } else if (smooth_mode == SMOOTHE_SHORT) {
-        frame[0] = (i2s_frame_t *) (buf1 + (NFRAMES-1)*sizeof(i2s_frame_t));
-        frame[1] = (i2s_frame_t *) (buf2);
-        frame[2] = (i2s_frame_t *) (buf2 + sizeof(i2s_frame_t));
+        frame[0] = (i2s_frame_t *) buf1 + (NFRAMES-1)*sizeof(i2s_frame_t);
+        frame[1] = (i2s_frame_t *) buf2;
+        frame[2] = (i2s_frame_t *) buf2 + sizeof(i2s_frame_t);
         
         for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL! 
             step = (frame[2]->slot[i] - frame[0]->slot[i]) / 2; 
@@ -84,6 +84,7 @@ bool ring_buf_init(void) {
             ESP_LOGE(TAG, "%s: calloc failed: errno %d", __func__, errno); 
             return false; 
         }
+        ESP_LOGI(TAG, "ringbuf[%d] = 0x%08x", i, (uint32_t)ring_buf[i]);
     }    
     idx_mask = NUM_RINGBUF_ELEMS - 1; 
     return true; 
@@ -134,7 +135,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         memcpy ((uint8_t *)ring_buf[next_idx], 
                 (uint8_t *)ring_buf[write_idx],
                 sizeof(i2s_buf_t)); 
-        smoothe (ring_buf[write_idx], ring_buf[next_idx], SMOOTHE_SHORT); 
+        smoothe (ring_buf[write_idx], ring_buf[next_idx], SMOOTHE_LONG); 
         if (!running) {
             slot_mask |= 1 << next_idx;                 // take note of the filled slot
         }

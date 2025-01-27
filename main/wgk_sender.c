@@ -298,7 +298,9 @@ void udp_tx_task(void *args) {
             // insert XOR checksum after the sample data
             // checksum = calculate_checksum((uint32_t *)udp_tx_buf, UDP_BUF_SIZE/4); 
             udp_tx_buf->checksum = calculate_checksum((uint32_t *)udp_tx_buf, NFRAMES * sizeof(udp_frame_t) / 4);
-            udp_tx_buf->sequence_number = sequence_number++; 
+            udp_tx_buf->sequence_number = sequence_number++;        
+            // we might as well truncate to the correct number of bits, then it's the slot number. 
+            
 #ifdef WITH_TIMESTAMP    
             udp_tx_buf->timestamp = get_time_us_in_isr();    // keep this for now
 #endif

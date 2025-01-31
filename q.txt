@@ -1,0 +1,65 @@
+I need your help creating a strategy and architecture for receiving and processing audio samples sent and received over WiFi / UDP. The goals are high fidelity and lowest latency in the sub 10 milliseconds range on ESP32-C5 (of which sample devkits are available). If you lack information on the ESP32-C5 MCU, you can work with your knowledge of the ESP32-C6 which has the same Risc-V core and is clocked at 160 MHz while the C5 clocks at 240 MHz but is otherwise equivalent. 
+
+The SDK used is ESP-IDF version 5.5-dev using the new I2S driver api, not the legacy one. Keep this in mind. This IDF version has preview ESP32-C5 support which works fine for this purpose, so no need to consider except as background information. 
+
+Audio data are sampled at 32 bit, 44.1 kHz, 8 channels (slots) using I2S / TDM256. Data is internally represented in signed 32 bit integer format for each sample. Since only 24 bits of resolution are required, sample data are packed 32 -> 24 bit, omitting the least significant byte of each sample, reducing the net data rate by 25%, and need to be unpacked on the receiver before sending them to the DAC via DMA, which again requires a signed 32 bit int format. This works and needs not to be considered but keep it as background information. As far as timing on the receiver, I2S/DMA needs to pick up received data at fixed intervals, which is done using the i2s callback for on_sent. This is a hard requirement, works fine and also needs not to be considered but keep it as background information. More details below. 
+
+Sender and receiver are organized in a private WiFi. The receiver is the access point, and the sender is the only station. There is nothing else in between, and no other devices in the same SSID. The latter is guaranteed because the AP is set up to only accept one station, and everything is protected using WPA3-SAE. The Wifi band is 5.8 GHz, and the AP selects a free channel during startup, so odds are we're really clean of other sources. In other words, this is an isolated environment. 
+
+In order to make optimum use of the WiFi/UDP MTU size without IP fragmentation (maximum payload 1472 byte), 60 samples are collected before sending. Thus, each UDP payload consists of 60 packets * 8 slots * 3 byte per slot = 1440 byte, plus a uint32_t XOR checksum, plus a uint32_t send sequence number (SSN), plus another uint32_t for other data, altogether 1452 byte. The SSN is simply incremented per packet so that on the receiving side, the correct packet sequence is known. Packets are sent at a rate of 60 packets/44100 Hz = 1.36 ms per packet or 735 datagrams per second. All of this works so far and is well within the capabilities of the chip (iperf measures an average UDP data rate of 62 Mbit/s for a payload of this size). 
+
+Please mind that a simple XOR checksum only reveals of a bit error occured, and provides no way to correct single bit errors. 
+
+At the moment I keep sort of a ring buffer of depth 8 where the received packets are supposed to be inserted according to their SSN modulo 8, so that each SSN has its fixed buffer slot, and if all goes well, each buffer slot gets written every 8 received packets. If all packets arrive in the correct sequence and in time, this works like a ring buffer. Read-wise, the buffers are simply read in ascending ring order. I also keep a read_sequence_number (RSN) variable which is incremented locally with each read. The offset between SSN and RSN determines the base latency caused by the processing on the receiver, and thus needs to be kept as small as feasible. 1 would be ideal, but 2 or even 3 would be acceptable, but not more because each step means an extra 1.36 ms of latency. (This is different from generic UDP audio streaming e.g. in a WLAN radio where you can buffer many seconds of audio data because latency is irrelevant!) 
+
+In an ideal world, this would work nicely e.g. with SSN - RSN = 1 or 2. Alas, the UDP jitter appears to be considerable for unknown reasons. I measured an average plain UDP packet latency of 540 +/- 200 microseconds but every once on a while (worst case, multiple times per second), packets arrive late, i.e. later than 1.36 ms after the previous one. Sometimes, packets appear to get lost altogether, leaving a gap. Reassembling the packets is thus the challenge. 
+
+The buffer reading routine ring_buffer_get() runs in an ISR context and needs to be kept short. It is invoked by the I2S on_sent callback which is triggered each 1.36 ms, i.e. each time one of several DMA buffers was sent to the DAC. ring_buffer_get() returns the buffer address of the next unread buffer, and the I2S callback uses a single memcpy to copy the data from the ring buffer to the DMA buffer. This takes about 5 µs and works already. Prototype: 
+
+uint8_t *ring_buffer_get(void); 
+
+I want you to consider a number of cases for packet reception, and come up with a high-level proposal (python-like pseudo code is okay) for the ring_buffer_put() routine which is called by the UDP receive task. ring_buffer_put() should take the incoming UDP data buffer as an argument and return void, i.e. 
+
+void ring_buffer_put(uint8_t *buffer); 
+
+See above how this buffer is structured. In particular, ring_buffer_put has access to the SSN and the checksum, as well as the RSN. State which criteria can be used to determine the cases, and what needs to be done to avoid gaps or glitches in the audio stream as best as possible. 
+
+At the moment, RSN keeps the sequence number of the packet which gets read next, i.e. it gets incremented immediately after reading a packet. Since it may be useful to increment pre-read, feel free to propose a solution based on pre-read increment. Some definitions: 
+
+- "packet arrives in time" means it would get inserted ahead of the read pointer, i.e. SSN = RSN + n for n >= 1
+
+- "late" means it would get inserted into the buffer slot which the read pointer points to, i.e. this buffer slot may be read asynchronously to the write any time. This slot must not be touched. 
+
+- "very late" or "lost" means the insert buffer slot would be beyond the read pointer. Consider to duplicate a previous packet if required. 
+
+- "correct SSN" means SSN = previous SSN + 1, i.e. the sequence is intact.
+
+1. a packet arrives in time
+  a) correct SSN
+  b) wrong SSN. What are the odds of this happening, any why? The SSN can never be the same as the previous one because it is counted up monotonously in the sender, except if a packet arrives twice, which should not happen given the network architecture. Can it be previous SSN + 2 or larger, and why? 
+
+2. a packet arrives late
+  a) correct SSN
+  b) wrong SSN 
+
+3. a packet arrives very late. 
+
+4. a packet gets lost i.e. nothing arrives. 
+
+5. packet XOR checksum error. This case appeared to be extremely rare in the experiments so far, but it is hard to handle without a considerable amount of calculation. Each packet consists of 60 samples as stated, and one would have to discard the most recent 60 samples (1.36 ms) when a single bit flips. With the current architecture, there is no way of correcting individual samples using e.g. forward error correction. A packet contains 480 individual samples which would all have to be checked and corrected. No problem for a WLAN radio but not with the low latency requirement. Also, if a bit error occurs in one of the lower significant bits of a sample, we can probably ignore it but if one of the higher order bits flips this may lead to an audible pop. At the moment I consider this case with low priority but make a proposal how to deal with it.  
+
+Given possible combinations of the cases (1 after 2, 4 after 1, etc.), also consider if a simple state machine would help.
+
+Consider the case where I duplicate each legitimate packet from case 1 to the next buffer slot unconditionally, to make sure something is there if case 2 - 4 happens. Does this make sense? 
+
+Given the timing constraints, do you see any potential for race conditions, i.e. where a buffer that is about to be read by the DMA interrupt any time may be asynchronously overwritten, or otherwise, that the DMA interrupt preempts a running memcpy in ring_buffer_put()? Consider that the DMA callback preempts all other tasks, also a lower-priority memcpy that may be running at the time of the interrupt. And how to avoid such race conditions. 
+
+
+Also check if there are options to reduce latency without jeopardizing correct audio replay. 
+
+
+
+
+
+
+

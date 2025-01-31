@@ -248,7 +248,7 @@ void udp_tx_task(void *args) {
     int i, j; 
     uint32_t count = 0; 
     uint32_t checksum; 
-    uint32_t sequence_number = 0;
+    uint32_t sequence_number = 1;    // we start at 1 to avoid having to deal with the 0 on the Rx side when the system starts. 
     
     dest_addr.sin_addr.s_addr = inet_addr(RX_IP_ADDR);
     dest_addr.sin_family = AF_INET;

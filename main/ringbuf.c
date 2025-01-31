@@ -61,6 +61,10 @@ static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode) {
             }
         }
     } else if (smooth_mode == SMOOTHE_SHORT) {
+        // easier: 
+        // frame[0] = &(buf1->frame[NFRAMES-1]); 
+        // frame[1] = &(buf2->frame[0]);
+        // frame[2] = &(buf2->frame[1]); 
         frame[0] = (i2s_frame_t *) buf1 + (NFRAMES-1)*sizeof(i2s_frame_t);
         frame[1] = (i2s_frame_t *) buf2;
         frame[2] = (i2s_frame_t *) buf2 + sizeof(i2s_frame_t);

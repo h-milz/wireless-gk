@@ -2,7 +2,7 @@
 
 Wireless-GK is a project which aims at developing a wireless alternative for Roland's famed (huh ...) GK cables. These cables are used to connect electric guitars which are equipped with a Roland GK-2A or GK-3 hexaphonic pickup to a Roland guitar synthesizer or modeller (e.g. GR-33, GR-55, VG-99 or any other of these models).  If you came here you probably know what you are looking for but anyway, if not, here's where you can get basic [information](https://en.wikipedia.org/wiki/Guitar_synthesizer#Roland_GK_interface). The cable consists of two 13-pin DIN connectors and a 13-wire cable. See the [GK-3 schematics](doc/GK-3-schematics.png). 
 
-# Basic Concept
+## Basic Concept
 
 This project is basically a low-latency generic 8-channel audio bridge over WiFi, where the inputs and outputs are tailored to work with Roland GK guitar synthesizers. You plug in your Roland GK equipped guitar to the sender's input. Analog audio data gets converted to digital, sent over the WiFi bridge, converted back to analog, and fed into your guitar synth. 
 
@@ -20,7 +20,7 @@ Analog/digital conversion takes place at a resolution of 24 bits per sample and 
 
 In order to keep latency low, the sender and receiver set up a private encrypted WiFi network with nothing in between. Data transport is done via UDP, like most if not all audio streaming solutions, to keep the latency low. The ESP32-C5 supports 5 GHz WiFi6 (802.11ax) which makes sure a) we stay away from the usually congested 2.4 GHz network, and b) we have more bandwidth available. I measured a sustained UDP bandwidth of about 62 MBit/s and a UDP packet latency of about 540 µs which is very well suited for such a solution _without audio compression_. 
 
-# Current Status
+## Current Status
 
 What works: 
 

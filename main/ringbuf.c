@@ -108,8 +108,8 @@ size_t ring_buf_size(void) {
  */
  
 void duplicate (uint32_t idx1, uint32_t idx2) { 
-    memcpy (ringbuf[idx2], ringbuf[idx1], sizeof(i2s_buf_t)); 
-    smoothe (ringbuf[idx1], ringbuf[idx2], SMOOTHE_SHORT);
+    memcpy (ring_buf[idx2], ring_buf[idx1], sizeof(i2s_buf_t)); 
+    smoothe (ring_buf[idx1], ring_buf[idx2], SMOOTHE_SHORT);
     duplicated[idx2] = true;
 }
 
@@ -119,8 +119,14 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 
     ssn = udp_buf->sequence_number;
     
-    if ((ssn == prev_ssn + 1) {             // we're in the correct sequence
-        if (ssn > rsn)) {                   // this is a legitimate packet
+#ifdef RX_STATS 
+    if (ssn <= rsn) {
+        stats[2]++;
+    }
+#endif            
+
+    if (ssn == prev_ssn + 1) {             // we're in the correct sequence
+        if (ssn > rsn) {                   // this is a legitimate packet
             write_idx = ssn & idx_mask;     // no modulo, no if-else
             // unpack
             for (i=0; i<NFRAMES; i++) {
@@ -133,8 +139,8 @@ void ring_buf_put(udp_buf_t *udp_buf) {
                 }
             }
             // if the buffer on the left was duped -> smoothe. 
-            if (duplicated[(ssn - 1) & idx_mask)] {
-                smoothe (ringbuf[(ssn - 1) & idx_mask)], ringbuf[write_idx], SMOOTHE_SHORT);
+            if (duplicated[(ssn - 1) & idx_mask]) {
+                smoothe (ring_buf[(ssn - 1) & idx_mask], ring_buf[write_idx], SMOOTHE_SHORT);
             }
             // this was a ligitimate packet, so ... 
             duplicated[write_idx] = false; 
@@ -143,28 +149,15 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             // and keep track of the sequencing
             init_count++;               // this needs only to be done when not running yet, 
                                         // but the ADDI is so fast that it makes no sense to check if running first. 
+        }    
 #ifdef RX_STATS 
-            stats[1]++; 
-#endif            
-        } else if (ssn == rsn) {
-            // RSN went too far, do we need to reset the RSN? 
-            // in any case, we no not write the buffer at read_idx. 
-            init_count = 0; 
-#ifdef RX_STATS 
-            stats[3]++; 
-#endif            
-        }
-    } else if (ssn < rsn) {
-        // Packet is way too late. drop, ignore. 
-        init_count = 0; 
-#ifdef RX_STATS 
-        stats[4]++; 
-#endif            
-    } else if (ssn <= prev_ssn) {
+        stats[1]++; 
+#endif
+    } else if (ssn < prev_ssn + 1) {
         // Packet is a duplicate (sent twice?) drop, ignore. 
         init_count = 0; 
 #ifdef RX_STATS 
-        stats[5]++; 
+        // stats[5]++; 
 #endif            
     } else if (ssn > prev_ssn + 1) {
         // this can happen if the previous packet got lost entirely, i.e. was never received, and we now see the following one
@@ -172,9 +165,9 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         // we could just insert it into its dedicated slot and rely on the previously duplicated packet at ssn otherwise. 
         init_count = 0;
 #ifdef RX_STATS 
-        stats[2]++; 
+        // stats[2]++; 
 #endif            
-     } 
+    } 
 
     // keep track of the sequencing
     prev_ssn = ssn; 
@@ -186,11 +179,12 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     }
     
     // for now, we ignore the checksum but sum up checksum errors for the statistics. 
+#ifdef RX_STATS
     if ( udp_buf->checksum != calculate_checksum((uint32_t *)udp_buf, NFRAMES * sizeof(udp_frame_t) / 4) ) {
-#ifdef RX_STATS 
-        stats[9]++; 
-#endif            
+        // stats[6]++; 
     }     
+#endif            
+
 }
 
 
@@ -211,34 +205,32 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
  * RX stats
  * 0 received
  * 1 ssn == prev_ssn + 1
- * 2 ssn > prev_ssn + 1
- * 3 ssn == rsn
- * 4 ssn < rsn
- * 5 ssn <= prev_ssn
- * 6 checksum err
+ * 2 ssn <= rsn
  */
  
 #ifdef RX_STATS
-static char stats_msg[][20] = { "received", "ssn == prev_ssn + 1", "ssn > prev_ssn + 1", "ssn == rsn", "ssn < rsn", 
-                       "ssn <= prev_ssn", "checksum err" };
+static char stats_msg[][20] = { "received", "ssn == prev_ssn + 1", "ssn <= rsn", }; 
                        
 void rx_stats_task(void *args) {
     uint32_t overall_stats[NUM_STATS] = {0}; 
     uint32_t last_ssn = 0, packets_sent, overall_packets_sent = 0;
     int i; 
+    uint32_t stat_count = 0; 
 
     while (1) {
         packets_sent = ssn - last_ssn;
         last_ssn = ssn; 
         overall_packets_sent += packets_sent; 
-        printf ("%-20s: %10s %10s\n", "stats", "intvl", "overall");  
+        stat_count++; 
+        printf ("%-10s %8lu : %10s %10s\n", "stats", stat_count, "intvl", "overall");  
         printf ("%-20s: %10lu %10lu\n", "packets sent", packets_sent, overall_packets_sent);
-        for (i=0; i<NUM_STATS; i++);
+        for (i=0; i<NUM_STATS; i++) {
             overall_stats[i] += stats[i];
             printf ("%-20s: %10lu %10lu\n", stats_msg[i], stats[i], overall_stats[i]);
             stats[i] = 0;   
         }
-        vTaskDelay(1360/ portTICK_PERIOD_MS); // approx. every 1000 packets
+        printf ("\n"); 
+        vTaskDelay(10000/ portTICK_PERIOD_MS); // approx. every 2000 packets
     }
 }
 #endif

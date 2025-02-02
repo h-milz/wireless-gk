@@ -27,10 +27,12 @@
 // a) we have plenty of RAM and 
 // b) ESP32 cannot handle non-32bit-aligned variables like uint8_t very well
 // so using a 32-bit variable is in fact more run-time efficient 
-DRAM_ATTR static uint32_t read_idx = 0;        // until the buffer is filled. 
 static uint32_t write_idx;             
 static uint32_t idx_mask; 
+static uint32_t ssn, rsn, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
+static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
+static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
 static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
 static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
@@ -101,67 +103,94 @@ size_t ring_buf_size(void) {
 }
 
 
+/*
+ * duplicate packet to slot[idx2], smoothe and set dupe = true
+ */
+ 
+void duplicate (uint32_t idx1, uint32_t idx2) { 
+    memcpy (ringbuf[idx2], ringbuf[idx1], sizeof(i2s_buf_t)); 
+    smoothe (ringbuf[idx1], ringbuf[idx2], SMOOTHE_SHORT);
+    duplicated[idx2] = true;
+}
+
+
 void ring_buf_put(udp_buf_t *udp_buf) {
     int i, j; 
-    bool need_smoothing = false; 
+
+    ssn = udp_buf->sequence_number;
     
-    write_idx = udp_buf->sequence_number & idx_mask;   // no modulo, no if-else
-    // ESP_LOGI(TAG, "write_idx = %d", write_idx); 
-    
-    // case decisions
-    // TODO: we could try to adjust the read_idx offset if too many late packets are detected over time. 
-    // i.e. decrease read_idx by one. 
-    // in this case the whole insert/read would effectively slip by one. 
-    // as an alternative to case #2, i.e. decrease read_idx first, then insert data
-    // beware: in this case we would change read_idx in 2 locations and need locking. 
-    // better: set bool slip_by_one=true and evaluate this in ring_buf_get
-    // i.e. return ringbuf[read_idx-1] and do not increase read_idx. 
-    // but it could happen that things normalize again and then we have effectively increased the latency by one packet. 
-    if ((write_idx >= ((read_idx + 1) & idx_mask)) || !running) {       // case #1: all's normal (+2) or late (+1). 
-        // unpack, done. 
-        for (i=0; i<NFRAMES; i++) {
-            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
-                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                memcpy ((uint8_t *)ring_buf[write_idx] + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                        (uint8_t *)udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                        SLOT_SIZE_UDP); 
+    if ((ssn == prev_ssn + 1) {             // we're in the correct sequence
+        if (ssn > rsn)) {                   // this is a legitimate packet
+            write_idx = ssn & idx_mask;     // no modulo, no if-else
+            // unpack
+            for (i=0; i<NFRAMES; i++) {
+                for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
+                    // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
+                    // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                    memcpy ((uint8_t *)ring_buf[write_idx] + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
+                            (uint8_t *)udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                            SLOT_SIZE_UDP); 
+                }
             }
+            // if the buffer on the left was duped -> smoothe. 
+            if (duplicated[(ssn - 1) & idx_mask)] {
+                smoothe (ringbuf[(ssn - 1) & idx_mask)], ringbuf[write_idx], SMOOTHE_SHORT);
+            }
+            // this was a ligitimate packet, so ... 
+            duplicated[write_idx] = false; 
+            // duplicate the current packet to the next slot to mitigate errors in the next step
+            duplicate (write_idx, (ssn + 1) & idx_mask); 
+            // and keep track of the sequencing
+            init_count++;               // this needs only to be done when not running yet, 
+                                        // but the ADDI is so fast that it makes no sense to check if running first. 
+#ifdef RX_STATS 
+            stats[1]++; 
+#endif            
+        } else if (ssn == rsn) {
+            // RSN went too far, do we need to reset the RSN? 
+            // in any case, we no not write the buffer at read_idx. 
+            init_count = 0; 
+#ifdef RX_STATS 
+            stats[3]++; 
+#endif            
         }
-        if (!running) {
-            slot_mask |= (1 << write_idx);                // take note of the filled slot
-        }
-        // TODO: can it happen that a correctly inserted packet does not match the previous one? 
-        // if we had case #2 before, the current packet _should_ be the next regular one. 
-        // otherwise we should smoothe here as well. 
-/*
-    } else if (write_idx == read_idx) {                 // case #2: really late packet. drop, duplicate, and smoothe 
-        // duplicate the packet at the current read position to the position one ahead
-        uint32_t next_idx = (write_idx+1) & idx_mask; 
-        memcpy ((uint8_t *)ring_buf[next_idx], 
-                (uint8_t *)ring_buf[write_idx],
-                sizeof(i2s_buf_t)); 
-        smoothe (ring_buf[write_idx], ring_buf[next_idx], SMOOTHE_SHORT); 
-        write_idx = next_idx; 
-        if (!running) {
-            slot_mask |= (1 << write_idx);                 // take note of the filled slot
-        }
-*/
-    } else {                                            // case #3: really really late, we drop it altogether
+    } else if (ssn < rsn) {
+        // Packet is way too late. drop, ignore. 
+        init_count = 0; 
+#ifdef RX_STATS 
+        stats[4]++; 
+#endif            
+    } else if (ssn <= prev_ssn) {
+        // Packet is a duplicate (sent twice?) drop, ignore. 
+        init_count = 0; 
+#ifdef RX_STATS 
+        stats[5]++; 
+#endif            
+    } else if (ssn > prev_ssn + 1) {
+        // this can happen if the previous packet got lost entirely, i.e. was never received, and we now see the following one
+        // fill intermediate slots with duplicates? 
+        // we could just insert it into its dedicated slot and rely on the previously duplicated packet at ssn otherwise. 
+        init_count = 0;
+#ifdef RX_STATS 
+        stats[2]++; 
+#endif            
+     } 
+
+    // keep track of the sequencing
+    prev_ssn = ssn; 
+            
+    if (!running && (init_count >= RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
+        running = true;
+        rsn = ssn - RINGBUF_OFFSET;                         // initial value. 
+        ESP_LOGI(TAG, "running"); 
     }
-        
-    // make sure the ring buffer gets filled before ring_buf_get returns != NULL
-    // instead of counting we set bits corresponding to the slot numbers and wait until all bits are set
-    // this makes sure that there is actual content in each of them.
-    // then we set read_idx RINGBUF_OFFSET slots behind the last write_idx
-    if (!running) {
-        // ESP_LOGI(TAG, "running = 0x%08x", slot_mask & 0x000000ff); 
-        if (slot_mask == all_mask) {    // all bits are set so we're full
-            running = true;
-            read_idx = (write_idx + NUM_RINGBUF_ELEMS - RINGBUF_OFFSET) & idx_mask; 
-            ESP_LOGI(TAG, "running"); 
-        }
-    }
+    
+    // for now, we ignore the checksum but sum up checksum errors for the statistics. 
+    if ( udp_buf->checksum != calculate_checksum((uint32_t *)udp_buf, NFRAMES * sizeof(udp_frame_t) / 4) ) {
+#ifdef RX_STATS 
+        stats[9]++; 
+#endif            
+    }     
 }
 
 
@@ -169,12 +198,48 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
     if (running) {
-        p = (uint8_t *)ring_buf[read_idx]; 
-        read_idx = (read_idx + 1) & idx_mask;   // avoid if-else or modulo stuff. 
+        p = (uint8_t *)ring_buf[rsn & idx_mask];
+        rsn++; 
         return p;
     } else {
         return NULL; 
     }
 }
 
+
+/* 
+ * RX stats
+ * 0 received
+ * 1 ssn == prev_ssn + 1
+ * 2 ssn > prev_ssn + 1
+ * 3 ssn == rsn
+ * 4 ssn < rsn
+ * 5 ssn <= prev_ssn
+ * 6 checksum err
+ */
+ 
+#ifdef RX_STATS
+static char stats_msg[][20] = { "received", "ssn == prev_ssn + 1", "ssn > prev_ssn + 1", "ssn == rsn", "ssn < rsn", 
+                       "ssn <= prev_ssn", "checksum err" };
+                       
+void rx_stats_task(void *args) {
+    uint32_t overall_stats[NUM_STATS] = {0}; 
+    uint32_t last_ssn = 0, packets_sent, overall_packets_sent = 0;
+    int i; 
+
+    while (1) {
+        packets_sent = ssn - last_ssn;
+        last_ssn = ssn; 
+        overall_packets_sent += packets_sent; 
+        printf ("%-20s: %10s %10s\n", "stats", "intvl", "overall");  
+        printf ("%-20s: %10lu %10lu\n", "packets sent", packets_sent, overall_packets_sent);
+        for (i=0; i<NUM_STATS; i++);
+            overall_stats[i] += stats[i];
+            printf ("%-20s: %10lu %10lu\n", stats_msg[i], stats[i], overall_stats[i]);
+            stats[i] = 0;   
+        }
+        vTaskDelay(1360/ portTICK_PERIOD_MS); // approx. every 1000 packets
+    }
+}
+#endif
 

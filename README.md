@@ -18,7 +18,21 @@ The basic building blocks are:
 
 Analog/digital conversion takes place at a resolution of 24 bits per sample and a sample rate of 44.1 kHz, just like Roland's recent guitar synthesizer models. 
 
-In order to keep latency low, the sender and receiver set up a private encrypted WiFi network with nothing in between. Data transport is done via UDP, like most if not all audio streaming solutions, to keep the latency low. The ESP32-C5 supports 5 GHz WiFi6 (802.11ax) which makes sure a) we stay away from the usually congested 2.4 GHz network, and b) we have more bandwidth available. I measured a sustained UDP bandwidth of about 62 MBit/s and a UDP packet latency of about 800 µs which is very well suited for such a solution _without audio compression_. 
+In order to keep latency low, the sender and receiver set up a private encrypted WiFi network with nothing in between. Data transport is done via UDP, like most if not all audio streaming solutions, to keep the latency low. The ESP32-C5 supports 5 GHz WiFi6 (802.11ax) which makes sure a) we stay away from the usually congested 2.4 GHz network, and b) we have more bandwidth available. I measured a sustained UDP bandwidth of about 62 MBit/s and a UDP packet latency of about 540 µs which is very well suited for such a solution _without audio compression_. 
+
+# Current Status
+
+What works: 
+
+ * 2-channel audio streaming using the final 8-channel architecture (i.e. 6 dummy channels are transmitted) 
+ * the end-to-end audio latency is less than 10 ms
+
+What needs more development and testing
+
+ * code cleanup
+ * actual synthesizer use - this requires an adapter board which provides the supply voltage for the GK-3 kit. At the moment, this can only be tested with 2 strings (2 audio channels)
+ * developing a prototype sporting the actual 8-channel A/D and D/A converters, GK-3 interface, etc. 
+
 
 Please click for more information: 
 

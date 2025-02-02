@@ -223,6 +223,10 @@ void app_main(void) {
 
         // create UDP Rx task
         xTaskCreate(udp_rx_task, "udp_rx_task", 4096, NULL, 18, &udp_rx_task_handle);
+        
+#ifdef RX_STATS
+        xTaskCreate(rx_stats_task, "rx_stats_task", 4096, NULL, 5, NULL); 
+#endif        
 
         // xTaskCreate(monitor_task, "monitor_task", 4096, NULL, 3, NULL);
 

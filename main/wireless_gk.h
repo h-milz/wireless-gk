@@ -139,7 +139,7 @@ extern volatile log_t _log[];
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_RINGBUF_ELEMS       8                       // this should probably be renamed NUM_RINGBUF_ELEMENTS and needs to be a power of 2. 
 // #define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 16       // 
-#define RINGBUF_OFFSET          2                       // when do we start to shuffle data to I2S. 
+#define RINGBUF_OFFSET          3                       // when do we start to shuffle data to I2S. 
 
 #define NUM_I2S_BUFS            4 
 // #define I2S_CBUF_SIZE           I2S_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size 
@@ -290,9 +290,9 @@ extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
  * 6 checksum err
  */
   
-#define RX_STATS 
+// #define RX_STATS 
 #ifdef RX_STATS 
-#define NUM_STATS 7
+#define NUM_STATS 3
 extern uint32_t stats[NUM_STATS];  
 #endif
 

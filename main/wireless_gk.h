@@ -279,6 +279,24 @@ uint8_t *ring_buf_get(void);
 extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 
 
+/* 
+ * RX stats
+ * 0 received
+ * 1 ssn == prev_ssn + 1
+ * 2 ssn > prev_ssn + 1
+ * 3 ssn == rsn
+ * 4 ssn < rsn
+ * 5 ssn <= prev_ssn
+ * 6 checksum err
+ */
+  
+#define RX_STATS 
+#ifdef RX_STATS 
+#define NUM_STATS 7
+extern uint32_t stats[NUM_STATS];  
+#endif
+
+
 /* ***************************************************************
  * Function prototypes
  * ***************************************************************/
@@ -305,7 +323,7 @@ bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *us
 void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
 int find_free_channel(void);
-
+void rx_stats_task(void *args);
 
 // main stuff
 typedef struct { 

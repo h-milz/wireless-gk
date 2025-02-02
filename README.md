@@ -20,6 +20,16 @@ Analog/digital conversion takes place at a resolution of 24 bits per sample and 
 
 In order to keep latency low, the sender and receiver set up a private encrypted WiFi network with nothing in between. Data transport is done via UDP, like most if not all audio streaming solutions, to keep the latency low. The ESP32-C5 supports 5 GHz WiFi6 (802.11ax) which makes sure a) we stay away from the usually congested 2.4 GHz network, and b) we have more bandwidth available. I measured a sustained UDP bandwidth of about 62 MBit/s and a UDP packet latency of about 540 µs which is very well suited for such a solution _without audio compression_. 
 
+Please click for more information: 
+
+ * [Functionality](doc/Functionality.md) 
+ * [User Interface](doc/Userinterface.md)
+ * [WiFi Concept](doc/Wifi.md)
+ * [Components](doc/Components.md) 
+ * [Analog Filter Design](doc/Filterdesign.md)
+ * [Alternative Approaches](doc/Alternatives.md)
+ * [Legacy Projects](doc/Legacy.md)
+
 ## Current Status
 
 What works: 
@@ -34,16 +44,7 @@ What needs more development and testing
  * developing a prototype sporting the actual 8-channel A/D and D/A converters, GK-3 interface, etc. 
 
 
-Please click for more information: 
-
- * [Functionality](doc/Functionality.md) 
- * [User Interface](doc/Userinterface.md)
- * [WiFi Concept](doc/Wifi.md)
- * [Components](doc/Components.md) 
- * [Analog Filter Design](doc/Filterdesign.md)
- * [Alternative Approaches](doc/Alternatives.md)
- * [Legacy Projects](doc/Legacy.md)
- * [Timeline / Progress](doc/Progress.md)
+See also [Timeline / Progress](doc/Progress.md)
 
 
 ## Commercial Thoughts

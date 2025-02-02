@@ -1,5 +1,10 @@
 # Progress 
 
+2025-02-02
+ 
+ * ok, after a lot of experimenting it appears I found a way to deal with the UDP jitter so that after listening to music using a Sennheiser studio headphone for several hours, I could not hear any glitches or pops except caused by excessive logging, although in the stats I can see occasional lost or misordered packets. 
+ * the end-to-end latency is between 8.5 and 9 ms. 
+
 2025-01-27
 
  * the new buffering strategy works basically. Optimization is next. 

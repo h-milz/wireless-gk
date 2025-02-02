@@ -24,7 +24,7 @@ Please click for more information:
 
  * [Functionality](doc/Functionality.md) 
  * [User Interface](doc/Userinterface.md)
- * [WiFi Concept](doc/WiFi.md)
+ * [WiFi Concept](doc/Wifi.md)
  * [Components](doc/Components.md) 
  * [Analog Filter Design](doc/Filterdesign.md)
  * [Alternative Approaches](doc/Alternatives.md)

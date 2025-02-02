@@ -39,7 +39,10 @@ static esp_wps_config_t wps_config = WPS_CONFIG_INIT_DEFAULT(WPS_TYPE_PBC);
 #ifdef RX_DEBUG
 static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", "before recvfrom", "after recvfrom", "end i2s_tx loop" }; 
 #endif
-    
+
+#ifdef RX_STATS
+uint32_t stats[NUM_STATS];  
+#endif     
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
 		int32_t event_id, void* event_data)
@@ -345,6 +348,10 @@ void udp_rx_task(void *args) {
 #endif
             int len = recvfrom(sock, udp_rx_buf, sizeof(udp_buf_t), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
+#ifdef RX_STATS
+            stats[0]++;
+#endif
+            
 #ifdef LATENCY_MEAS
             stop_time = get_time_us_in_isr();
             // ESP_LOGI (RX_TAG, "latency: %lu µs", stop_time - start_time);

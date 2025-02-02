@@ -383,10 +383,10 @@ void udp_rx_task(void *args) {
             if (len == sizeof(udp_buf_t)) {
                 // ESP_LOGW(RX_TAG, "len ok");
                 // assume success. verify checksum 
-                checksum = udp_rx_buf->checksum; 
+                // checksum = udp_rx_buf->checksum; 
                 // memcpy (&checksum, udp_rx_buf + UDP_BUF_SIZE, sizeof(checksum)); 
-                mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
-                if (checksum == mychecksum) {
+                // mychecksum = calculate_checksum((uint32_t *)udp_rx_buf, NFRAMES * sizeof(udp_frame_t) / 4); 
+                // if (checksum == mychecksum) {
                     // ESP_LOGW(RX_TAG, "checksum ok");
                     ring_buf_put(udp_rx_buf);
 #if 0
@@ -404,9 +404,6 @@ void udp_rx_task(void *args) {
 #endif            	        
             	    }
 #endif 
-                } else {
-                    ESP_LOGW(RX_TAG, "packet checksum err"); 
-                }
                 
                 // TODO extract S1, S2 to global var. 
                 // S1 S2 will be at (uint32_t)UDP_PAYLOAD_SIZE-1 , i.e. the last byte
@@ -423,17 +420,13 @@ void udp_rx_task(void *args) {
                     ESP_LOGI(RX_TAG, "count %lu, my_count %lu, diff %d", count, mycount, (int)count - (int)mycount); 
                 }
 #endif                
-            } else if (len == -1) {
+            } else if (len < 0) {
                 // we ignore broken packets for now. 
+#ifdef RX_STATS
+                stats[7]++;
+#endif
                 ESP_LOGW(RX_TAG, "UDP receive error: %d", errno);
                 continue; 
-            } else if (len < 0) {
-                // TODO if we have a UDP timeout it's probably better to stop operation
-                // to avoid artifacts from the loudspeakers. 
-                ESP_LOGW(RX_TAG, "recvfrom failed: errno %d", errno);
-                // blink "network failure, press reset"
-                // vTaskDelete(NULL); 
-                break;
             }
             
 #ifdef RX_DEBUG        

@@ -35,7 +35,7 @@ Please click for more information:
 What works: 
 
  * 2-channel audio streaming using the final 8-channel architecture (i.e. 6 dummy channels are transmitted) 
- * the end-to-end audio latency is less than 10 ms
+ * the end-to-end audio latency is about 11 ms
 
 What needs more development and testing
 

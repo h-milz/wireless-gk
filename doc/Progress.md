@@ -1,9 +1,13 @@
 # Progress 
 
+2025-02-03
+
+ * long measurement session to find sweet spots between sample rate, number of frames per packet, and the offset of the pointers in the ring buffer. It appears that at 44.1 kHz, 60 frames and an offset of 4 ist best, as far as packet errors. The remaining errors are mitigated by caching each valid sample so that in case of a packet error, the cached sample is used and the packets gaps are linearly interpolated to avoid discontinuities. Also, receiving a larger number of packets before starting replay helps. Defensively, the end-to-end latency is 11.4 ms. 
+ * It turns out that the sample rates 46875 and 37500 Hz also work fine, which can be generated using an integer divider from any of the supported I2S clocks, avoiding clock jitter from the fractional divider. 44643 and 41667 Hz can also be used because their dividers have very small fractional parts when derived from the 160 MHz or 240 MHz PLLs, reducing clock jitter. (see [Components](doc/Components.md) for a discussion). 
+
 2025-02-02
  
  * ok, after a lot of experimenting it appears I found a way to deal with the UDP jitter so that after listening to music using a Sennheiser studio headphone for several hours, I could not hear any glitches or pops except caused by excessive logging, although in the stats I can see occasional lost or misordered packets. 
- * the end-to-end latency is between 8.5 and 9 ms. 
 
 2025-01-27
 

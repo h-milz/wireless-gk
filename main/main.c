@@ -186,7 +186,7 @@ void app_main(void) {
         // enable channel
         i2s_channel_enable(i2s_rx_handle);
 // #endif /* LATENCY_MEAS*/        
-        ESP_LOGI(TAG, "sizeof(udp_tx_buf) = %d", sizeof(udp_buf_t));
+        // ESP_LOGI(TAG, "sizeof(udp_tx_buf) = %d", sizeof(udp_buf_t));
         
     } else {   // receiver
         // initialize GPIO pins
@@ -240,12 +240,12 @@ void app_main(void) {
         i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
-        ESP_LOGI(TAG, "sizeof(udp_rx_buf) = %d", sizeof(udp_buf_t));
-        ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ring_buf_size());
+        // ESP_LOGI(TAG, "sizeof(udp_rx_buf) = %d", sizeof(udp_buf_t));
+        // ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ring_buf_size());
     }
     
-    ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
+    // ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    // ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
 
 /*    
     while (1) {

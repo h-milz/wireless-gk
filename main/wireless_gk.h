@@ -139,13 +139,13 @@ extern volatile log_t _log[];
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_RINGBUF_ELEMS       8                       // this should probably be renamed NUM_RINGBUF_ELEMENTS and needs to be a power of 2. 
 // #define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 16       // 
-#define RINGBUF_OFFSET          3                       // when do we start to shuffle data to I2S. 
+#define RINGBUF_OFFSET          4                       // when do we start to shuffle data to I2S. 
 
 #define NUM_I2S_BUFS            4 
 // #define I2S_CBUF_SIZE           I2S_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size 
 
 #define I2S_NUM                 I2S_NUM_AUTO
-#define SAMPLE_RATE             44100                   // 48000 should works as well, or anything less
+#define SAMPLE_RATE             44100                   // 48000 should work as well, or anything less
 
 
 /* ***************************************************************
@@ -171,7 +171,7 @@ static i2s_tdm_config_t i2s_rx_cfg = {
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
         .sample_rate_hz = SAMPLE_RATE,
         .mclk_multiple = I2S_MCLK_MULTIPLE,     // Set MCLK / WS ratio 
-        .clk_src = I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
+        .clk_src = I2S_CLK_SRC_DEFAULT,    // I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
         // .ext_clk_freq_hz = 11289600,         // if external. sample_rate_hz * slot_bits * slot_num
     },
 #ifdef I2S_STD
@@ -218,7 +218,7 @@ static i2s_tdm_config_t i2s_tx_cfg = {
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
         .sample_rate_hz = SAMPLE_RATE,
         .mclk_multiple = I2S_MCLK_MULTIPLE,     // Set MCLK / WS ratio
-        .clk_src = I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
+        .clk_src = I2S_CLK_SRC_DEFAULT, // ,         // we will use I2S_CLK_SRC_EXTERNAL !
         // .ext_clk_freq_hz = 11289600,         // if external. sample_rate_hz * slot_bits * slot_num
     },
 #ifdef I2S_STD
@@ -290,7 +290,7 @@ extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
  * 6 checksum err
  */
   
-// #define RX_STATS 
+#define RX_STATS 
 #ifdef RX_STATS 
 #define NUM_STATS 3
 extern uint32_t stats[NUM_STATS];  

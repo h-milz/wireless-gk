@@ -90,7 +90,7 @@ bool ring_buf_init(void) {
             ESP_LOGE(TAG, "%s: calloc failed: errno %d", __func__, errno); 
             return false; 
         }
-        ESP_LOGI(TAG, "ringbuf[%d] = 0x%08x", i, (uint32_t)ring_buf[i]);
+        // ESP_LOGI(TAG, "ringbuf[%d] = 0x%08x", i, (uint32_t)ring_buf[i]);
     }    
     idx_mask = NUM_RINGBUF_ELEMS - 1; 
     return true; 
@@ -172,10 +172,11 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     // keep track of the sequencing
     prev_ssn = ssn; 
             
-    if (!running && (init_count >= RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
+    if (!running && (init_count >= NUM_RINGBUF_ELEMS + RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
         running = true;
         rsn = ssn - RINGBUF_OFFSET;                         // initial value. 
         ESP_LOGI(TAG, "running"); 
+        // TODO: LED "running" 
     }
     
     // for now, we ignore the checksum but sum up checksum errors for the statistics. 
@@ -191,7 +192,10 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 // This will be called in an ISR context so beware! 
 IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
+
     if (running) {
+        // ? 
+        // if (ssn <= rsn) rsn--; 
         p = (uint8_t *)ring_buf[rsn & idx_mask];
         rsn++; 
         return p;
@@ -216,8 +220,10 @@ void rx_stats_task(void *args) {
     uint32_t last_ssn = 0, packets_sent, overall_packets_sent = 0;
     int i; 
     uint32_t stat_count = 0; 
-
+    char *TAG = "rx_stats";
+    
     while (1) {
+#if 0    
         packets_sent = ssn - last_ssn;
         last_ssn = ssn; 
         overall_packets_sent += packets_sent; 
@@ -230,7 +236,17 @@ void rx_stats_task(void *args) {
             stats[i] = 0;   
         }
         printf ("\n"); 
-        vTaskDelay(10000/ portTICK_PERIOD_MS); // approx. every 2000 packets
+#endif 
+        vTaskDelay(10000/ portTICK_PERIOD_MS); // every ~ 10 seconds 
+        if (stats[2] > 0) {
+            overall_stats[2] += stats[2]; 
+            ESP_LOGI(TAG, "%10lu %10lu", stats[2], overall_stats[2]);
+            stats[2] = 0; 
+        }        
+        stat_count++;
+        if (stat_count == 60) {         // after 10 minutes
+            ESP_LOGW(TAG, "10 minutes %10lu", overall_stats[2]);
+        } 
     }
 }
 #endif

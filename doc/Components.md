@@ -42,6 +42,7 @@ It's not that other audio converters marketed with 24 or 32 bit resolution are s
 ## References 
 
  * Texas Instruments Techical Brief [Fractional/Integer-N PLL Basics](https://www.ti.com/lit/an/swra029/swra029.pdf), August 1999
+ * ESP32-C6 [Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-c6_technical_reference_manual_en.pdf), sections 8.2 "Clock" and 29.6 "I2S RX/TX Clock"
 
 
 # Copyright and Licensing

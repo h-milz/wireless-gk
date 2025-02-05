@@ -146,6 +146,8 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             duplicated[write_idx] = false; 
             // duplicate the current packet to the next slot to mitigate errors in the next step
             duplicate (write_idx, (ssn + 1) & idx_mask); 
+            // duplicate twice? 
+            // duplicate ((ssn + 1) & idx_mask, (ssn + 2) & idx_mask); 
             // and keep track of the sequencing
             init_count++;               // this needs only to be done when not running yet, 
                                         // but the ADDI is so fast that it makes no sense to check if running first. 

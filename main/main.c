@@ -34,6 +34,7 @@ DRAM_ATTR volatile int p = 0;
 DRAM_ATTR volatile log_t _log[NUM];   
 #endif 
 
+// uint32_t time1; 
 
 
 // Timer configuration
@@ -240,6 +241,9 @@ void app_main(void) {
         i2s_channel_register_event_callback(i2s_tx_handle, &cbs, NULL);
 
         i2s_channel_enable(i2s_tx_handle);
+        // time1 = get_time_us_in_isr();
+        // stats[0] = -1000;
+        // stats[1] = 1000; 
         // ESP_LOGI(TAG, "sizeof(udp_rx_buf) = %d", sizeof(udp_buf_t));
         // ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ring_buf_size());
     }

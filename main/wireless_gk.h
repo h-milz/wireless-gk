@@ -281,21 +281,17 @@ extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 
 /* 
  * RX stats
- * 0 received
- * 1 ssn == prev_ssn + 1
- * 2 ssn > prev_ssn + 1
- * 3 ssn == rsn
- * 4 ssn < rsn
- * 5 ssn <= prev_ssn
- * 6 checksum err
+ * 0 maxdiff
+ * 1 mindiff
+ * 2 num ssn<=rsn
  */
   
 #define RX_STATS 
 #ifdef RX_STATS 
-#define NUM_STATS 3
-extern uint32_t stats[NUM_STATS];  
+#define NUM_STATS 5
+extern int stats[NUM_STATS];  
 #endif
-
+#define SSN_STATS
 
 /* ***************************************************************
  * Function prototypes
@@ -324,6 +320,7 @@ void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
 int find_free_channel(void);
 void rx_stats_task(void *args);
+extern uint32_t time3; 
 
 // main stuff
 typedef struct { 

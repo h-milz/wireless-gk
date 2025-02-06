@@ -29,7 +29,7 @@
 // so using a 32-bit variable is in fact more run-time efficient 
 static uint32_t write_idx;             
 static uint32_t idx_mask; 
-static uint32_t ssn, rsn, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
+static uint32_t ssn=1, rsn=1, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
 static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
 static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
@@ -37,11 +37,25 @@ static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
 static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
 DRAM_ATTR static bool running = false;              // will be used in an ISR context
+static uint32_t time2; 
+DRAM_ATTR uint32_t time3 = 0;  
+static bool done = false; 
+static bool logging = true; 
 
 #define SMOOTHE_SHORT 3
 #define SMOOTHE_LONG 5
 static i2s_frame_t *frame[SMOOTHE_LONG];    // just in case, works also when we use SHORT. 
 
+#ifdef SSN_STATS
+typedef struct {
+    uint32_t timestamp;
+    uint32_t ssn;
+    uint32_t rsn;
+} ssn_stat_t;
+#define SSN_STAT_ENTRIES 8192
+ssn_stat_t ssn_stat[SSN_STAT_ENTRIES];
+uint32_t n = 0; 
+#endif
 
 // smoothe does a linear interpolation to remove discontinuities
 // generated when we duplicate a packet to replace a missing packet
@@ -115,15 +129,9 @@ void duplicate (uint32_t idx1, uint32_t idx2) {
 
 
 void ring_buf_put(udp_buf_t *udp_buf) {
-    int i, j; 
+    int i, j, d; 
 
     ssn = udp_buf->sequence_number;
-    
-#ifdef RX_STATS 
-    if (ssn <= rsn) {
-        stats[2]++;
-    }
-#endif            
 
     if (ssn == prev_ssn + 1) {             // we're in the correct sequence
         if (ssn > rsn) {                   // this is a legitimate packet
@@ -153,7 +161,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
                                         // but the ADDI is so fast that it makes no sense to check if running first. 
         }    
 #ifdef RX_STATS 
-        stats[1]++; 
+        // stats[1]++; 
 #endif
     } else if (ssn < prev_ssn + 1) {
         // Packet is a duplicate (sent twice?) drop, ignore. 
@@ -176,11 +184,39 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             
     if (!running && (init_count >= NUM_RINGBUF_ELEMS + RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
         running = true;
+        time2 = get_time_us_in_isr(); 
         rsn = ssn - RINGBUF_OFFSET;                         // initial value. 
+        // vTaskDelay (...); 
+        // i2s_channel_enable(i2s_tx_handle);
         ESP_LOGI(TAG, "running"); 
         // TODO: LED "running" 
     }
     
+    if (!done && running && (time3 != 0)) {
+        // float quot = (float) (time3 - time2) / (1.0e6 * (float) NFRAMES / (float) SAMPLE_RATE);
+        uint32_t diff = time3 - time2;
+        ESP_LOGW(TAG, "--- time2 %lu time3 %lu diff %lu", time2, time3, diff); 
+        done = true; 
+    }
+
+#ifdef RX_STATS 
+    if (running) {
+        d = ssn - rsn;
+        if (d > stats[0]) stats[0] = d;
+        if (d < stats[1]) stats[1] = d;
+        if (d < 1)   stats[2]++;
+    }
+#endif            
+
+#ifdef SSN_STATS
+    if (logging) {
+        ssn_stat[n].timestamp = get_time_us_in_isr();
+        ssn_stat[n].ssn = ssn;
+        ssn_stat[n].rsn = rsn;
+        n = (n+1) & 0x00001fff;       // ring 
+    }
+#endif
+
     // for now, we ignore the checksum but sum up checksum errors for the statistics. 
 #ifdef RX_STATS
     if ( udp_buf->checksum != calculate_checksum((uint32_t *)udp_buf, NFRAMES * sizeof(udp_frame_t) / 4) ) {
@@ -196,10 +232,11 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
 
     if (running) {
-        // ? 
-        // if (ssn <= rsn) rsn--; 
         p = (uint8_t *)ring_buf[rsn & idx_mask];
-        rsn++; 
+        rsn = rsn + 1; 
+        if (time3 == 0) {                   // when does the first fetch occur. 
+            time3 = get_time_us_in_isr();
+        }
         return p;
     } else {
         return NULL; 
@@ -241,14 +278,35 @@ void rx_stats_task(void *args) {
 #endif 
         vTaskDelay(10000/ portTICK_PERIOD_MS); // every ~ 10 seconds 
         if (stats[2] > 0) {
+            uint32_t delta_t, last_ts = 0;
             overall_stats[2] += stats[2]; 
             ESP_LOGI(TAG, "%10lu %10lu", stats[2], overall_stats[2]);
             stats[2] = 0; 
+
+#ifdef SSN_STATS
+            logging = false; 
+            i2s_channel_disable(i2s_tx_handle);
+            printf ("\nssn_stats\n");
+            for (int m=0; m<SSN_STAT_ENTRIES; m++) {
+                int d = (int) (ssn_stat[m].ssn - ssn_stat[m].rsn);
+                delta_t = ssn_stat[m].timestamp - last_ts;
+                last_ts = ssn_stat[m].timestamp;
+                printf ("%10lu %10lu %10lu %10lu %8d %s\n", 
+                        ssn_stat[m].timestamp,
+                        delta_t,
+                        ssn_stat[m].ssn,
+                        ssn_stat[m].rsn,
+                        d,
+                        d <= 0 ? "neg" : "");
+            }
+            vTaskDelete(udp_rx_task_handle);
+#endif
         }        
         stat_count++;
         if (stat_count == 60) {         // after 10 minutes
-            ESP_LOGW(TAG, "10 minutes %10lu", overall_stats[2]);
+            ESP_LOGW(TAG, "10 minutes %10lu mindiff %d maxdiff %d", overall_stats[2], stats[1], stats[0]);
         } 
+
     }
 }
 #endif

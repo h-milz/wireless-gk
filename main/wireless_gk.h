@@ -292,6 +292,7 @@ extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 extern int stats[NUM_STATS];  
 #endif
 #define SSN_STATS
+#define SSN_TRACE
 
 /* ***************************************************************
  * Function prototypes

@@ -41,7 +41,7 @@ static char t[][20] = {"ISR", "begin i2s_tx loop", "after notify", "unpacking", 
 #endif
 
 #ifdef RX_STATS
-uint32_t stats[NUM_STATS];  
+int stats[NUM_STATS];  
 #endif     
 
 static void wifi_event_handler(void* arg, esp_event_base_t event_base,
@@ -265,6 +265,8 @@ void init_wifi_rx(bool setup_requested) {
 IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event, void *user_ctx) {
     uint8_t *i2sbuf, *dmabuf;
     size_t size;
+
+
         
     dmabuf = (uint8_t *)event->dma_buf;
     size = event->size;
@@ -349,7 +351,7 @@ void udp_rx_task(void *args) {
             int len = recvfrom(sock, udp_rx_buf, sizeof(udp_buf_t), 0, NULL, NULL); // (struct sockaddr *)&source_addr, &socklen);
 
 #ifdef RX_STATS
-            stats[0]++;
+            // stats[0]++;
 #endif
             
 #ifdef LATENCY_MEAS

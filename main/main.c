@@ -248,8 +248,8 @@ void app_main(void) {
         // ESP_LOGI(TAG, "sizeof(ringbuf)    = %d", ring_buf_size());
     }
     
-    // ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
-    // ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
+    ESP_LOGI (TAG, "largest free block: %u", heap_caps_get_largest_free_block(MALLOC_CAP_8BIT));
+    ESP_LOGI (TAG, "min free heap size: %lu", esp_get_minimum_free_heap_size());
 
 /*    
     while (1) {

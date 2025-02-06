@@ -49,12 +49,16 @@ static i2s_frame_t *frame[SMOOTHE_LONG];    // just in case, works also when we 
 #ifdef SSN_STATS
 typedef struct {
     uint32_t timestamp;
-    uint32_t ssn;
-    uint32_t rsn;
+    int sn;
+    uint32_t bufssn;
 } ssn_stat_t;
 #define SSN_STAT_ENTRIES 8192
 ssn_stat_t ssn_stat[SSN_STAT_ENTRIES];
 uint32_t n = 0; 
+#endif
+
+#ifdef SSN_TRACE
+DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS]; 
 #endif
 
 // smoothe does a linear interpolation to remove discontinuities
@@ -152,8 +156,14 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             }
             // this was a ligitimate packet, so ... 
             duplicated[write_idx] = false; 
+#ifdef SSN_TRACE            
+            bufssn[write_idx] = ssn;
+#endif            
             // duplicate the current packet to the next slot to mitigate errors in the next step
             duplicate (write_idx, (ssn + 1) & idx_mask); 
+#ifdef SSN_TRACE            
+            bufssn[(ssn + 1) & idx_mask] = ssn; 
+#endif
             // duplicate twice? 
             // duplicate ((ssn + 1) & idx_mask, (ssn + 2) & idx_mask); 
             // and keep track of the sequencing
@@ -211,8 +221,8 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 #ifdef SSN_STATS
     if (logging) {
         ssn_stat[n].timestamp = get_time_us_in_isr();
-        ssn_stat[n].ssn = ssn;
-        ssn_stat[n].rsn = rsn;
+        ssn_stat[n].sn = (int) ssn;
+        ssn_stat[n].bufssn = 0;
         n = (n+1) & 0x00001fff;       // ring 
     }
 #endif
@@ -232,6 +242,14 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
 
     if (running) {
+#ifdef SSN_TRACE
+        if (logging) {
+            ssn_stat[n].timestamp = get_time_us_in_isr();
+            ssn_stat[n].sn = - (int) rsn;
+            ssn_stat[n].bufssn = bufssn[rsn & idx_mask];    // we add the ssn of the packet that is in the slot
+            n = (n+1) & 0x00001fff;       // ring 
+        }
+#endif
         p = (uint8_t *)ring_buf[rsn & idx_mask];
         rsn = rsn + 1; 
         if (time3 == 0) {                   // when does the first fetch occur. 
@@ -278,7 +296,7 @@ void rx_stats_task(void *args) {
 #endif 
         vTaskDelay(10000/ portTICK_PERIOD_MS); // every ~ 10 seconds 
         if (stats[2] > 0) {
-            uint32_t delta_t, last_ts = 0;
+            uint32_t delta_t, delta_t_ssn, last_ts = 0, last_ssn_ts = 0;
             overall_stats[2] += stats[2]; 
             ESP_LOGI(TAG, "%10lu %10lu", stats[2], overall_stats[2]);
             stats[2] = 0; 
@@ -288,19 +306,32 @@ void rx_stats_task(void *args) {
             i2s_channel_disable(i2s_tx_handle);
             printf ("\nssn_stats\n");
             for (int m=0; m<SSN_STAT_ENTRIES; m++) {
-                int d = (int) (ssn_stat[m].ssn - ssn_stat[m].rsn);
-                delta_t = ssn_stat[m].timestamp - last_ts;
-                last_ts = ssn_stat[m].timestamp;
-                printf ("%10lu %10lu %10lu %10lu %8d %s\n", 
-                        ssn_stat[m].timestamp,
-                        delta_t,
-                        ssn_stat[m].ssn,
-                        ssn_stat[m].rsn,
-                        d,
-                        d <= 0 ? "neg" : "");
+                if (ssn_stat[m].sn > 0) {    // we have a put entry
+                    delta_t = ssn_stat[m].timestamp - last_ts;
+                    delta_t_ssn = ssn_stat[m].timestamp - last_ssn_ts;
+                    last_ssn_ts = last_ts = ssn_stat[m].timestamp;
+                    printf ("%10lu %10lu ssn %10lu -> slot %lu and %lu\n", 
+                            ssn_stat[m].timestamp,
+                            delta_t_ssn, 
+                            (uint32_t) ssn_stat[m].sn, 
+                            (uint32_t) ssn_stat[m].sn & idx_mask,
+                            ((uint32_t) ssn_stat[m].sn + 1) & idx_mask
+                            ); 
+                } else {                     // a get entry
+                    delta_t = ssn_stat[m].timestamp - last_ts;
+                    last_ts = ssn_stat[m].timestamp;
+                    printf ("%10lu %10lu rsn %10lu reads ssn %10lu from slot %lu\n", 
+                            ssn_stat[m].timestamp,
+                            delta_t,
+                            (uint32_t) (- ssn_stat[m].sn),
+                            ssn_stat[m].bufssn,
+                            (uint32_t) (- ssn_stat[m].sn) & idx_mask);
+                
+                }
+            
             }
             vTaskDelete(udp_rx_task_handle);
-#endif
+#endif  /* SSN_STATS */
         }        
         stat_count++;
         if (stat_count == 60) {         // after 10 minutes
@@ -309,5 +340,5 @@ void rx_stats_task(void *args) {
 
     }
 }
-#endif
+#endif  /* RX_STATS */
 

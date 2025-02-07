@@ -41,6 +41,7 @@ static uint32_t time2;
 DRAM_ATTR uint32_t time3 = 0;  
 static bool done = false; 
 static bool logging = true; 
+static uint32_t arr_time, last_arr_time = 0, diff_arr_time; 
 
 #define SMOOTHE_SHORT 3
 #define SMOOTHE_LONG 5
@@ -136,7 +137,10 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     int i, j, d; 
 
     ssn = udp_buf->sequence_number;
-
+#ifdef RX_STATS    
+    arr_time = get_time_us_in_isr();
+#endif
+    
     if (ssn == prev_ssn + 1) {             // we're in the correct sequence
         if (ssn > rsn) {                   // this is a legitimate packet
             write_idx = ssn & idx_mask;     // no modulo, no if-else
@@ -161,6 +165,11 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 #endif            
             // duplicate the current packet to the next slot to mitigate errors in the next step
             duplicate (write_idx, (ssn + 1) & idx_mask); 
+            // also smoothe the gap after the duplicate in case we see > 12 ms outages
+            // this should avoid audible pops during a buffer overrun 
+            smoothe (ring_buf[(ssn + 1) & idx_mask], 
+                     ring_buf[(ssn + 2) & idx_mask], 
+                     SMOOTHE_SHORT);
 #ifdef SSN_TRACE            
             bufssn[(ssn + 1) & idx_mask] = ssn; 
 #endif
@@ -192,6 +201,17 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     // keep track of the sequencing
     prev_ssn = ssn; 
             
+#ifdef RX_STATS            
+    if (running) {
+        diff_arr_time = arr_time - last_arr_time;
+        last_arr_time = arr_time; 
+        if (diff_arr_time > 4000) {
+            ESP_LOGW(TAG, "%10lu", diff_arr_time);        
+        }
+    }
+#endif    
+    
+                 
     if (!running && (init_count >= NUM_RINGBUF_ELEMS + RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
         running = true;
         time2 = get_time_us_in_isr(); 

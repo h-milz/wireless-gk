@@ -77,6 +77,7 @@
 #ifdef TX_TEST
 #define SSID "WGK"
 #define PASS "start123"
+#define WIFI_CHANNEL 136
 #endif
 #define RX_IP_ADDR "192.168.4.1"
 #define PORT 45678
@@ -291,8 +292,8 @@ extern udp_buf_t *udp_tx_buf, *udp_rx_buf;
 #define NUM_STATS 5
 extern int stats[NUM_STATS];  
 #endif
-#define SSN_STATS
-#define SSN_TRACE
+// #define SSN_STATS
+// #define SSN_TRACE
 
 /* ***************************************************************
  * Function prototypes

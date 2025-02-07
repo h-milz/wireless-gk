@@ -135,8 +135,8 @@ void init_wifi_tx(bool setup_requested) {
     esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    cfg.tx_buf_type = 1;                       // dynamic (default anyway)
-    cfg.dynamic_tx_buf_num = 5;                // we want packets to be sent really fast. 
+    // cfg.tx_buf_type = 1;                       // dynamic (default anyway)
+    // cfg.dynamic_tx_buf_num = 10;                // we want packets to be sent really fast. 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));
@@ -273,6 +273,7 @@ void udp_tx_task(void *args) {
         // setsockopt (sock, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
         
         // TODO UDP send buffer size - default 5760, can we make much bigger! 
+        // int buf_size = 5760; 
         // setsockopt(sock, SOL_SOCKET, SO_SNDBUF, &buf_size, sizeof(buf_size));
 
         ESP_LOGI(TX_TAG, "Socket created, sending to %s:%d", RX_IP_ADDR, PORT);
@@ -314,11 +315,10 @@ void udp_tx_task(void *args) {
 #ifdef LATENCY_MEAS            
             gpio_set_level(SIG_PIN, 1);    
 #endif            
-            err = sendto(sock, udp_tx_buf, sizeof(udp_buf_t), 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
+            err = sendto(sock, udp_tx_buf, sizeof(udp_buf_t), MSG_DONTWAIT, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
 #ifdef LATENCY_MEAS            
             gpio_set_level(SIG_PIN, 0);    
 #endif
-            // err = sendto(sock, udp_tx_buf, UDP_PAYLOAD_SIZE, 0, (struct sockaddr *)&dest_addr, sizeof(dest_addr));
             
 #ifdef TX_DEBUG        
             _log[p].loc = 5;
@@ -335,8 +335,14 @@ void udp_tx_task(void *args) {
         	        // BLINK! 
         	        vTaskDelay(500/portTICK_PERIOD_MS); // gracefully try again. 
                     break;
+        	    } else if (errno == EAGAIN) {
+                    ESP_LOGE(TX_TAG, "sendto: EAGAIN");                            	    
+                    vTaskDelay(10);
+        	    } else if (errno == EWOULDBLOCK) {
+                    ESP_LOGE(TX_TAG, "sendto: EWOULDBLOCK");                            	    
+                    vTaskDelay(10);
         	    } else {
-        	        ESP_LOGE(TX_TAG, "lwip_sendto fail. %d", errno);
+        	        ESP_LOGE(TX_TAG, "sendto lwip_sendto fail. %d", errno);
                     break;
                 }
     	    }

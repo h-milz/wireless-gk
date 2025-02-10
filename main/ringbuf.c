@@ -40,7 +40,7 @@ DRAM_ATTR static bool running = false;              // will be used in an ISR co
 static uint32_t time2; 
 DRAM_ATTR uint32_t time3 = 0;  
 static bool done = false; 
-static bool logging = true; 
+static bool logging = true;                         // will be deactivated by the output routine
 static uint32_t arr_time, last_arr_time = 0, diff_arr_time; 
 
 #define SMOOTHE_SHORT 3
@@ -158,7 +158,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             if (duplicated[(ssn - 1) & idx_mask]) {
                 smoothe (ring_buf[(ssn - 1) & idx_mask], ring_buf[write_idx], SMOOTHE_SHORT);
             }
-            // this was a ligitimate packet, so ... 
+            // this was a ligitimate packet, so we mark it accordingly. 
             duplicated[write_idx] = false; 
 #ifdef SSN_TRACE            
             bufssn[write_idx] = ssn;
@@ -179,24 +179,28 @@ void ring_buf_put(udp_buf_t *udp_buf) {
             init_count++;               // this needs only to be done when not running yet, 
                                         // but the ADDI is so fast that it makes no sense to check if running first. 
         }    
-#ifdef RX_STATS 
-        // stats[1]++; 
-#endif
+/*
+ * these things never occured! 
     } else if (ssn < prev_ssn + 1) {
         // Packet is a duplicate (sent twice?) drop, ignore. 
         init_count = 0; 
-#ifdef RX_STATS 
-        // stats[5]++; 
-#endif            
     } else if (ssn > prev_ssn + 1) {
         // this can happen if the previous packet got lost entirely, i.e. was never received, and we now see the following one
         // fill intermediate slots with duplicates? 
         // we could just insert it into its dedicated slot and rely on the previously duplicated packet at ssn otherwise. 
         init_count = 0;
-#ifdef RX_STATS 
-        // stats[2]++; 
-#endif            
+*/
     } 
+
+#ifdef SSN_STATS
+    if (logging) {
+        ssn_stat[n].timestamp = get_time_us_in_isr();
+        ssn_stat[n].sn = (int) ssn;
+        ssn_stat[n].bufssn = (ssn > rsn) ? 1 : 0;      // we mark this as inserted if ssn > rsn else not
+        n = (n+1) & 0x00001fff;       // ring 
+    }
+#endif
+
 
     // keep track of the sequencing
     prev_ssn = ssn; 
@@ -234,18 +238,10 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         d = ssn - rsn;
         if (d > stats[0]) stats[0] = d;
         if (d < stats[1]) stats[1] = d;
-        if (d < 1)   stats[2]++;
+        if (ssn <= rsn)   stats[2]++;
     }
 #endif            
 
-#ifdef SSN_STATS
-    if (logging) {
-        ssn_stat[n].timestamp = get_time_us_in_isr();
-        ssn_stat[n].sn = (int) ssn;
-        ssn_stat[n].bufssn = 0;
-        n = (n+1) & 0x00001fff;       // ring 
-    }
-#endif
 
     // for now, we ignore the checksum but sum up checksum errors for the statistics. 
 #ifdef RX_STATS
@@ -262,11 +258,11 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
 
     if (running) {
-#ifdef SSN_TRACE
+#ifdef SSN_STATS
         if (logging) {
             ssn_stat[n].timestamp = get_time_us_in_isr();
-            ssn_stat[n].sn = - (int) rsn;
-            ssn_stat[n].bufssn = bufssn[rsn & idx_mask];    // we add the ssn of the packet that is in the slot
+            ssn_stat[n].sn = - (int) rsn;                   // negative to mark a get entry. 
+            ssn_stat[n].bufssn = bufssn[rsn & idx_mask];    // ssn of the packet that is in the slot
             n = (n+1) & 0x00001fff;       // ring 
         }
 #endif
@@ -316,7 +312,8 @@ void rx_stats_task(void *args) {
 #endif 
         vTaskDelay(10000/ portTICK_PERIOD_MS); // every ~ 10 seconds 
         if (stats[2] > 0) {
-            uint32_t delta_t, delta_t_ssn, last_ts = 0, last_ssn_ts = 0;
+            int delta_t, delta_t_ssn;
+            uint32_t last_ts = 0, last_ssn_ts = 0;
             overall_stats[2] += stats[2]; 
             ESP_LOGI(TAG, "%10lu %10lu", stats[2], overall_stats[2]);
             stats[2] = 0; 
@@ -324,33 +321,43 @@ void rx_stats_task(void *args) {
 #ifdef SSN_STATS
             logging = false; 
             i2s_channel_disable(i2s_tx_handle);
+            vTaskDelete(udp_rx_task_handle);
+            vTaskDelay(1000/portTICK_PERIOD_MS);
             printf ("\nssn_stats\n");
             for (int m=0; m<SSN_STAT_ENTRIES; m++) {
-                if (ssn_stat[m].sn > 0) {    // we have a put entry
+                if (ssn_stat[m].sn > 0) {                                       // we have a put entry
                     delta_t = ssn_stat[m].timestamp - last_ts;
                     delta_t_ssn = ssn_stat[m].timestamp - last_ssn_ts;
                     last_ssn_ts = last_ts = ssn_stat[m].timestamp;
-                    printf ("%10lu %10lu ssn %10lu -> slot %lu and %lu\n", 
-                            ssn_stat[m].timestamp,
-                            delta_t_ssn, 
-                            (uint32_t) ssn_stat[m].sn, 
-                            (uint32_t) ssn_stat[m].sn & idx_mask,
-                            ((uint32_t) ssn_stat[m].sn + 1) & idx_mask
-                            ); 
+                    if (ssn_stat[m].bufssn) {                                   // packet was inserted
+                        printf ("%10lu %10d ssn %10lu -> slot %lu and %lu\n", 
+                                ssn_stat[m].timestamp,
+                                delta_t_ssn,                                    // time since last valid packet
+                                (uint32_t) ssn_stat[m].sn, 
+                                (uint32_t) ssn_stat[m].sn & idx_mask,           // own slot
+                                ((uint32_t) ssn_stat[m].sn + 1) & idx_mask      // next slot b/c duplicated
+                                ); 
+                    } else {                                                    // packet was logged but not inserted
+                        printf ("%10lu %10d ssn %10lu\n", 
+                                ssn_stat[m].timestamp,
+                                delta_t_ssn,                                    // time since last valid packet
+                                (uint32_t) ssn_stat[m].sn
+                                );                     
+                    }
                 } else {                     // a get entry
                     delta_t = ssn_stat[m].timestamp - last_ts;
                     last_ts = ssn_stat[m].timestamp;
-                    printf ("%10lu %10lu rsn %10lu reads ssn %10lu from slot %lu\n", 
+                    printf ("%10lu %10d rsn %10lu reads ssn %10lu from slot %lu\n", 
                             ssn_stat[m].timestamp,
-                            delta_t,
-                            (uint32_t) (- ssn_stat[m].sn),
-                            ssn_stat[m].bufssn,
-                            (uint32_t) (- ssn_stat[m].sn) & idx_mask);
+                            delta_t,                                        // time since last event
+                            (uint32_t) (- ssn_stat[m].sn),                  // the rsn
+                            ssn_stat[m].bufssn,                             // ssn that is in the slot
+                            (uint32_t) (- ssn_stat[m].sn) & idx_mask);      // own slot number
                 
                 }
             
             }
-            vTaskDelete(udp_rx_task_handle);
+
 #endif  /* SSN_STATS */
         }        
         stat_count++;

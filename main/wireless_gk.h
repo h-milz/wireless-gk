@@ -57,6 +57,7 @@
 // #define RX_DEBUG
 // #define LATENCY_MEAS                 // activate this if you want to do a UDP latency measurement. 
                                         // Connect Tx SIG_PIN to Rx ISR_PIN and GND to GND. 
+#define WITH_TEMP
 
 // during development, we use STD with PCM1808 ADC and PCM5102 DAC
 #define I2S_STD
@@ -269,6 +270,9 @@ typedef struct {
 #ifdef WITH_TIMESTAMP    
     uint32_t timestamp; 
 #endif    
+#ifdef WITH_TEMP
+    float tx_temp;
+#endif    
     uint32_t switches;
 } udp_buf_t;
 
@@ -311,6 +315,7 @@ void i2s_rx_task(void *args);
 bool init_gpio_tx(void);
 void tx_setup (void);
 void latency_meas_task(void *args); 
+void tx_temp_task(void *args); 
 
 // Receiver stuff
 extern i2s_chan_handle_t i2s_tx_handle;
@@ -323,7 +328,12 @@ void i2s_tx_task(void *args);
 bool init_gpio_rx(void);
 int find_free_channel(void);
 void rx_stats_task(void *args);
+void rx_temp_task(void *args); 
 extern uint32_t time3; 
+
+#ifdef WITH_TEMP
+extern float rx_temp, tx_temp; 
+#endif
 
 // main stuff
 typedef struct { 

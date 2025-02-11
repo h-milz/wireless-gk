@@ -138,7 +138,7 @@ extern volatile log_t _log[];
 #define I2S_BUF_SIZE            NFRAMES * NUM_SLOTS_I2S * SLOT_SIZE_I2S  // Size of each I2S or DMA buffer
 
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
-#define NUM_RINGBUF_ELEMS       32                      // this needs to be a power of 2. 
+#define NUM_RINGBUF_ELEMS       64                      // this needs to be a power of 2. 
 // #define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 16       // 
 #define RINGBUF_OFFSET          4                       // when do we start to shuffle data to I2S. 
 

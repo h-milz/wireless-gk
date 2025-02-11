@@ -180,6 +180,9 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         // we could just insert it into its dedicated slot and rely on the previously duplicated packet at ssn otherwise. 
         init_count = 0;
 */
+#ifdef WITH_TEMP
+        tx_temp = udp_buf->tx_temp; 
+#endif    
     } 
 
 #ifdef SSN_STATS
@@ -324,11 +327,11 @@ void rx_stats_task(void *args) {
         printf ("\n"); 
 #endif 
         vTaskDelay(10000/ portTICK_PERIOD_MS); // every ~ 10 seconds 
-        if (stats[2] > 0) {
+        if (stats[2] >= 0) {
             int delta_t, delta_t_ssn;
             uint32_t last_ts = 0, last_ssn_ts = 0;
             overall_stats[2] += stats[2]; 
-            ESP_LOGI(TAG, "%10lu %10lu", stats[2], overall_stats[2]);
+            ESP_LOGI(TAG, "%10lu %10lu Rx %.1f°C Tx %.1f°C", stats[2], overall_stats[2], rx_temp, tx_temp);
             stats[2] = 0; 
 
 #ifdef SSN_STATS

@@ -102,8 +102,8 @@ IRAM_ATTR static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode)
 bool ring_buf_init(void) {
     int i; 
     for (i=0; i<NUM_RINGBUF_ELEMS; i++) {
-        // calloc ring_buffers explicitly in internal RAM
-        ring_buf[i] = (i2s_buf_t *)heap_caps_calloc(1, sizeof(i2s_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL); 
+        // calloc ring_buffers explicitly in SPIRAM
+        ring_buf[i] = (i2s_buf_t *)heap_caps_calloc(1, sizeof(i2s_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_SPIRAM); // INTERNAL); 
         if (ring_buf[i] == NULL) {               // This Should Not Happen[TM]
             ESP_LOGE(TAG, "%s: calloc failed: errno %d", __func__, errno); 
             return false; 

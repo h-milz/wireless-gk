@@ -36,6 +36,10 @@ DRAM_ATTR volatile log_t _log[NUM];
 
 // uint32_t time1; 
 
+#ifdef WITH_TEMP
+float rx_temp, tx_temp;
+#endif
+
 
 // Timer configuration
 #include "driver/gptimer.h"
@@ -91,6 +95,39 @@ void monitor_task(void *args) {
     }
 }
 
+#ifdef WITH_TEMP    
+#include "driver/temperature_sensor.h"
+void tx_temp_task(void *args) {
+    temperature_sensor_handle_t temp_sensor = NULL;
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 80);
+
+    temperature_sensor_install(&temp_sensor_config, &temp_sensor);
+    ESP_LOGI(TAG, "Enable temperature sensor");
+    temperature_sensor_enable(temp_sensor);
+
+    while (1) {
+        temperature_sensor_get_celsius(temp_sensor, &tx_temp);
+        ESP_LOGI(TAG, "T = %.1f °C", tx_temp); 
+        vTaskDelay (10000/portTICK_PERIOD_MS);  // once per minute
+    }
+}
+
+void rx_temp_task(void *args) {
+    temperature_sensor_handle_t temp_sensor = NULL;
+    temperature_sensor_config_t temp_sensor_config = TEMPERATURE_SENSOR_CONFIG_DEFAULT(10, 80);
+
+    temperature_sensor_install(&temp_sensor_config, &temp_sensor);
+    ESP_LOGI(TAG, "Enable temperature sensor");
+    temperature_sensor_enable(temp_sensor);
+
+    while (1) {
+        temperature_sensor_get_celsius(temp_sensor, &rx_temp);
+        // ESP_LOGI(TAG, "T = %.1f °C", temperature); 
+        vTaskDelay (10000/portTICK_PERIOD_MS);  // once per minute
+    }
+}
+#endif
+
 
 // calculate simple XOR checksum based on uint32_t, which is much faster than using uint8_t
 // there are 4x less XOR operations
@@ -135,7 +172,7 @@ void app_main(void) {
     gpio_reset_pin(ID_PIN);
 
     init_hardware_timer();
-
+    
     if (sender) {
         // initialize GPIO pins
         // returns true if setup was pressed
@@ -151,6 +188,10 @@ void app_main(void) {
         
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
+
+#ifdef WITH_TEMP    
+        xTaskCreate(tx_temp_task, "tx_temp_task", 4096, NULL, 5, NULL);
+#endif
         
         // create udp send buffer explicitly in RAM
         udp_tx_buf = (udp_buf_t *)heap_caps_calloc(1, sizeof(udp_buf_t), MALLOC_CAP_8BIT | MALLOC_CAP_INTERNAL);         
@@ -206,6 +247,10 @@ void app_main(void) {
         // let it settle. 
         vTaskDelay(200/portTICK_PERIOD_MS);
         
+#ifdef WITH_TEMP    
+        xTaskCreate(rx_temp_task, "rx_temp_task", 4096, NULL, 5, NULL);
+#endif
+
         // initialize i2s ring buffer
         if (!ring_buf_init()) {              // This Should Not Happen[TM]
             vTaskDelete(NULL); 

@@ -35,7 +35,6 @@ static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
 // static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
 static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
-static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
 DRAM_ATTR static bool running = false;              // will be used in an ISR context
 static uint32_t time2; 
 DRAM_ATTR uint32_t time3 = 0;  
@@ -283,23 +282,6 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
     return p;
 }
 
-
-wenn rsn <= bufssn(rsn), OK, ich bin hinter dem Sender und es ist ein valider Block im Slot. 
-    # den merken wir uns
-    if (stalled):                           # start recover
-        smoothe (last_valid_rsn, rsn)       # hilft beim recover. 
-        stalled = false
-    last_valid_rsn = rsn
-    p = buf(rsn)
-else, da muss ein Stall passiert sein. Wir geben den letzten validen zurück:
-    if (!stalled):
-        smoothe (last_valid_rsn, last_valid_rsn)     # falls wir auf der Stelle treten, nur 1x
-        stalled = true
-    p = buf(last_valid_rsn)
-
-rsn++
-return p 
-         
 
 /* 
  * RX stats

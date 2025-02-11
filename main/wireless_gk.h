@@ -77,7 +77,7 @@
 #ifdef TX_TEST
 #define SSID "WGK"
 #define PASS "start123"
-#define WIFI_CHANNEL 136
+#define WIFI_CHANNEL 144
 #endif
 #define RX_IP_ADDR "192.168.4.1"
 #define PORT 45678
@@ -260,7 +260,8 @@ typedef struct {
     uint8_t slot[NUM_SLOTS_UDP * SLOT_SIZE_UDP];
 } udp_frame_t;
 
-#define WITH_TIMESTAMP
+// #define WITH_TIMESTAMP
+
 typedef struct {
     udp_frame_t frame[NFRAMES];
     uint32_t checksum;

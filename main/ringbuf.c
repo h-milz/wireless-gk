@@ -260,21 +260,27 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
         n = (n+1) & 0x00001fff;       // ring 
     }
 #endif
-    if (bufssn[rsn & idx_mask] >= rsn) {             // sender is ahead of us: OK. 
+
+    // if (bufssn[rsn & idx_mask] == rsn)  this is a regular packet, and we are exactly on track. Must be first in if-else. 
+    // if (bufssn[rsn & idx_mask] >  rsn)  we observe a burst outpacing rsn. smoothe with the last valid packet. 
+    // if (bufssn[rsn & idx_mask] <  rsn)  we observe a stall and loop the last valid packet. 
+    
+    if (bufssn[rsn & idx_mask] >= rsn) {            // sender is ahead of us: OK. 
         // always smoothe with the last valid packet, it could be a burst outpacing rsn
         // TODO find how to avoid this step or perform it only once
-        smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[rsn & idx_mask], SMOOTHE_SHORT);
+        // smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[rsn & idx_mask], SMOOTHE_SHORT);
         p = (uint8_t *)ring_buf[rsn & idx_mask];        
         last_valid_rsn = rsn;
         stalled = false; 
-    } else {
+    } else {                                        // sending has stalled; we need to loop the last valid sample
         // smoothe once with itself in case we're stalled
         if (!stalled) {
-            smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
+            // smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
             stalled = true;    
         }
         p = (uint8_t *)ring_buf[last_valid_rsn & idx_mask];
     }
+
     rsn = rsn + 1; 
     if (time3 == 0) {                   // when does the first fetch occur. 
         time3 = get_time_us_in_isr();

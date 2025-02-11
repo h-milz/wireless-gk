@@ -307,6 +307,9 @@ void udp_tx_task(void *args) {
 #ifdef WITH_TIMESTAMP    
             udp_tx_buf->timestamp = get_time_us_in_isr();    // keep this for now
 #endif
+#ifdef WITH_TEMP
+            udp_tx_buf->tx_temp = tx_temp;
+#endif
             // TODO insert S1, S2 in the last byte
             
             // UDP latency measurement

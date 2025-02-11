@@ -32,7 +32,7 @@ static uint32_t idx_mask;
 static uint32_t ssn=1, rsn=1, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
 static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
-static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
+// static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
 static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
 static uint32_t all_mask = (1 << NUM_RINGBUF_ELEMS) - 1;   // e.g. 4 will result in 00001111
@@ -58,14 +58,15 @@ ssn_stat_t ssn_stat[SSN_STAT_ENTRIES];
 uint32_t n = 0; 
 #endif
 
-#ifdef SSN_TRACE
+// #ifdef SSN_TRACE
 DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS]; 
-#endif
+// #endif
 
 // smoothe does a linear interpolation to remove discontinuities
 // generated when we duplicate a packet to replace a missing packet
 // see tools/interp.c for a discussion 
-static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode) {
+// NEW: only called by _get() in ISR context
+IRAM_ATTR static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode) {
     int step, i, j; 
 
     if (smooth_mode == SMOOTHE_LONG) {
@@ -116,22 +117,17 @@ bool ring_buf_init(void) {
 }
 
 
-// helper function
-size_t ring_buf_size(void) {
-    return NUM_RINGBUF_ELEMS * sizeof(i2s_buf_t); 
-}
-
-
 /*
  * duplicate packet to slot[idx2], smoothe and set dupe = true
  */
  
+/* 
 void duplicate (uint32_t idx1, uint32_t idx2) { 
     memcpy (ring_buf[idx2], ring_buf[idx1], sizeof(i2s_buf_t)); 
     smoothe (ring_buf[idx1], ring_buf[idx2], SMOOTHE_SHORT);
     duplicated[idx2] = true;
 }
-
+*/
 
 void ring_buf_put(udp_buf_t *udp_buf) {
     int i, j, d; 
@@ -141,44 +137,40 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     arr_time = get_time_us_in_isr();
 #endif
     
-    if (ssn == prev_ssn + 1) {             // we're in the correct sequence
-        if (ssn > rsn) {                   // this is a legitimate packet
-            write_idx = ssn & idx_mask;     // no modulo, no if-else
-            // unpack
-            for (i=0; i<NFRAMES; i++) {
-                for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
-                    // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
-                    // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
-                    memcpy ((uint8_t *)ring_buf[write_idx] + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
-                            (uint8_t *)udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
-                            SLOT_SIZE_UDP); 
-                }
+    if (ssn == prev_ssn + 1) {             // we're in the correct sequence but this appears to always be true.
+        //if (ssn > rsn) {                   // this is a legitimate packet
+        write_idx = ssn & idx_mask;     // no modulo, no if-else
+        // unpack
+        for (i=0; i<NFRAMES; i++) {
+            for (j=NUM_SLOTS_I2S-1; j>=0; j--) {
+                // the offset of a sample in the DMA buffer is (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1
+                // the offset of a sample in the UDP buffer is (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP
+                memcpy ((uint8_t *)ring_buf[write_idx] + (i * NUM_SLOTS_I2S + j) * SLOT_SIZE_I2S + 1, 
+                        (uint8_t *)udp_buf + (i * NUM_SLOTS_UDP + j) * SLOT_SIZE_UDP, 
+                        SLOT_SIZE_UDP); 
             }
-            // if the buffer on the left was duped -> smoothe. 
-            if (duplicated[(ssn - 1) & idx_mask]) {
-                smoothe (ring_buf[(ssn - 1) & idx_mask], ring_buf[write_idx], SMOOTHE_SHORT);
-            }
-            // this was a ligitimate packet, so we mark it accordingly. 
-            duplicated[write_idx] = false; 
-#ifdef SSN_TRACE            
-            bufssn[write_idx] = ssn;
-#endif            
-            // duplicate the current packet to the next slot to mitigate errors in the next step
-            duplicate (write_idx, (ssn + 1) & idx_mask); 
-            // also smoothe the gap after the duplicate in case we see > 12 ms outages
-            // this should avoid audible pops during a buffer overrun 
-            smoothe (ring_buf[(ssn + 1) & idx_mask], 
-                     ring_buf[(ssn + 2) & idx_mask], 
-                     SMOOTHE_SHORT);
-#ifdef SSN_TRACE            
-            bufssn[(ssn + 1) & idx_mask] = ssn; 
-#endif
-            // duplicate twice? 
-            // duplicate ((ssn + 1) & idx_mask, (ssn + 2) & idx_mask); 
-            // and keep track of the sequencing
-            init_count++;               // this needs only to be done when not running yet, 
-                                        // but the ADDI is so fast that it makes no sense to check if running first. 
-        }    
+        }
+        // if the buffer on the left was duped -> smoothe. 
+        // if (duplicated[(ssn - 1) & idx_mask]) {
+        //     smoothe (ring_buf[(ssn - 1) & idx_mask], ring_buf[write_idx], SMOOTHE_SHORT);
+        // }
+        // this was a ligitimate packet, so we mark it accordingly. 
+        // duplicated[write_idx] = false; 
+        bufssn[write_idx] = ssn;
+        // duplicate the current packet to the next slot to mitigate errors in the next step
+        // duplicate (write_idx, (ssn + 1) & idx_mask); 
+        // also smoothe the gap after the duplicate in case we see > 12 ms outages
+        // this should avoid audible pops during a buffer overrun 
+        // smoothe (ring_buf[(ssn + 1) & idx_mask], 
+        //          ring_buf[(ssn + 2) & idx_mask], 
+        //          SMOOTHE_SHORT);
+        // bufssn[(ssn + 1) & idx_mask] = ssn; 
+        // duplicate twice? 
+        // duplicate ((ssn + 1) & idx_mask, (ssn + 2) & idx_mask); 
+        // and keep track of the sequencing
+        init_count++;               // this needs only to be done when not running yet, 
+                                    // but the ADDI is so fast that it makes no sense to check if running first. 
+        // }    
 /*
  * these things never occured! 
     } else if (ssn < prev_ssn + 1) {
@@ -216,7 +208,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 #endif    
     
                  
-    if (!running && (init_count >= NUM_RINGBUF_ELEMS + RINGBUF_OFFSET)) {       // if we have enough consecutive valid packets: start replay. 
+    if (!running && (init_count >= RINGBUF_OFFSET + 2)) {       // if we have enough consecutive valid packets: start replay. 
         running = true;
         time2 = get_time_us_in_isr(); 
         rsn = ssn - RINGBUF_OFFSET;                         // initial value. 
@@ -256,27 +248,58 @@ void ring_buf_put(udp_buf_t *udp_buf) {
 // This will be called in an ISR context so beware! 
 IRAM_ATTR uint8_t *ring_buf_get(void) {
     uint8_t *p;
-
-    if (running) {
+    static uint32_t last_valid_rsn;
+    static bool stalled; 
+    
+    if (!running) return NULL; 
+    
 #ifdef SSN_STATS
-        if (logging) {
-            ssn_stat[n].timestamp = get_time_us_in_isr();
-            ssn_stat[n].sn = - (int) rsn;                   // negative to mark a get entry. 
-            ssn_stat[n].bufssn = bufssn[rsn & idx_mask];    // ssn of the packet that is in the slot
-            n = (n+1) & 0x00001fff;       // ring 
-        }
-#endif
-        p = (uint8_t *)ring_buf[rsn & idx_mask];
-        rsn = rsn + 1; 
-        if (time3 == 0) {                   // when does the first fetch occur. 
-            time3 = get_time_us_in_isr();
-        }
-        return p;
-    } else {
-        return NULL; 
+    if (logging) {
+        ssn_stat[n].timestamp = get_time_us_in_isr();
+        ssn_stat[n].sn = - (int) rsn;                   // negative to mark a get entry. 
+        ssn_stat[n].bufssn = bufssn[rsn & idx_mask];    // ssn of the packet that is in the slot
+        n = (n+1) & 0x00001fff;       // ring 
     }
+#endif
+    if (bufssn[rsn & idx_mask] >= rsn) {             // sender is ahead of us: OK. 
+        // always smoothe with the last valid packet, it could be a burst outpacing rsn
+        // TODO find how to avoid this step or perform it only once
+        smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[rsn & idx_mask], SMOOTHE_SHORT);
+        p = (uint8_t *)ring_buf[rsn & idx_mask];        
+        last_valid_rsn = rsn;
+        stalled = false; 
+    } else {
+        // smoothe once with itself in case we're stalled
+        if (!stalled) {
+            smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
+            stalled = true;    
+        }
+        p = (uint8_t *)ring_buf[last_valid_rsn & idx_mask];
+    }
+    rsn = rsn + 1; 
+    if (time3 == 0) {                   // when does the first fetch occur. 
+        time3 = get_time_us_in_isr();
+    }
+    return p;
 }
 
+
+wenn rsn <= bufssn(rsn), OK, ich bin hinter dem Sender und es ist ein valider Block im Slot. 
+    # den merken wir uns
+    if (stalled):                           # start recover
+        smoothe (last_valid_rsn, rsn)       # hilft beim recover. 
+        stalled = false
+    last_valid_rsn = rsn
+    p = buf(rsn)
+else, da muss ein Stall passiert sein. Wir geben den letzten validen zurück:
+    if (!stalled):
+        smoothe (last_valid_rsn, last_valid_rsn)     # falls wir auf der Stelle treten, nur 1x
+        stalled = true
+    p = buf(last_valid_rsn)
+
+rsn++
+return p 
+         
 
 /* 
  * RX stats

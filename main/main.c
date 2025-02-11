@@ -169,7 +169,7 @@ void app_main(void) {
 // #else        
         // create I2S Rx task
         // xTaskCreate(i2s_rx_task, "i2s_rx_task", 4096, NULL, 18, &i2s_rx_task_handle);
-    
+
         // create UDP Tx task
         xTaskCreate(udp_tx_task, "udp_tx_task", 4096, NULL, 18, &udp_tx_task_handle);
 

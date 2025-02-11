@@ -32,6 +32,7 @@ static uint32_t idx_mask;
 static uint32_t ssn=1, rsn=1, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
 static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
+DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS];  // TODO is being read only, does not need to be DRAM_ATTR. 
 // static bool duplicated[NUM_RINGBUF_ELEMS];      // initialized to all zeroes = false
 static const char *TAG = "wgk_ring_buf";
 static uint32_t slot_mask = 0; 
@@ -56,10 +57,6 @@ typedef struct {
 ssn_stat_t ssn_stat[SSN_STAT_ENTRIES];
 uint32_t n = 0; 
 #endif
-
-// #ifdef SSN_TRACE
-DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS]; 
-// #endif
 
 // smoothe does a linear interpolation to remove discontinuities
 // generated when we duplicate a packet to replace a missing packet
@@ -91,8 +88,10 @@ IRAM_ATTR static void smoothe(i2s_buf_t *buf1, i2s_buf_t *buf2, int smooth_mode)
         frame[2] = (i2s_frame_t *) buf2 + sizeof(i2s_frame_t);
         
         for (i=0; i<NUM_SLOTS_I2S-1; i++) {     // we ignore slot7 which is GKVOL! 
-            step = (frame[2]->slot[i] - frame[0]->slot[i]) / 2; 
-            frame[1]->slot[i] = frame[0]->slot[i] + step;    
+            // f1 = (f0 + f2)/2 can cause an int overflow! 
+            // step = (frame[2]->slot[i] - frame[0]->slot[i]) / 2; 
+            // frame[1]->slot[i] = frame[0]->slot[i] + step;    
+            frame[1]->slot[i] = (frame[0]->slot[i] / 2) + (frame[2]->slot[i] / 2);    
         }
     } else {
         // oops, this should not happen
@@ -217,6 +216,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         // TODO: LED "running" 
     }
     
+#ifdef RX_STATS 
     if (!done && running && (time3 != 0)) {
         // float quot = (float) (time3 - time2) / (1.0e6 * (float) NFRAMES / (float) SAMPLE_RATE);
         uint32_t diff = time3 - time2;
@@ -224,7 +224,6 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         done = true; 
     }
 
-#ifdef RX_STATS 
     if (running) {
         d = ssn - rsn;
         if (d > stats[0]) stats[0] = d;
@@ -265,17 +264,20 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
     // if (bufssn[rsn & idx_mask] >  rsn)  we observe a burst outpacing rsn. smoothe with the last valid packet. 
     // if (bufssn[rsn & idx_mask] <  rsn)  we observe a stall and loop the last valid packet. 
     
-    if (bufssn[rsn & idx_mask] >= rsn) {            // sender is ahead of us: OK. 
+    if (bufssn[rsn & idx_mask] == rsn) {            // sender is ahead of us: OK. 
+        p = (uint8_t *)ring_buf[rsn & idx_mask];        
+        last_valid_rsn = rsn;
+        stalled = false; 
+    } else if (bufssn[rsn & idx_mask] > rsn) {
         // always smoothe with the last valid packet, it could be a burst outpacing rsn
-        // TODO find how to avoid this step or perform it only once
-        // smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[rsn & idx_mask], SMOOTHE_SHORT);
+        smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[rsn & idx_mask], SMOOTHE_SHORT);
         p = (uint8_t *)ring_buf[rsn & idx_mask];        
         last_valid_rsn = rsn;
         stalled = false; 
     } else {                                        // sending has stalled; we need to loop the last valid sample
         // smoothe once with itself in case we're stalled
         if (!stalled) {
-            // smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
+            smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
             stalled = true;    
         }
         p = (uint8_t *)ring_buf[last_valid_rsn & idx_mask];

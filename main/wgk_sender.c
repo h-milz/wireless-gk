@@ -135,8 +135,6 @@ void init_wifi_tx(bool setup_requested) {
     esp_netif_create_default_wifi_sta();
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    // cfg.tx_buf_type = 1;                       // dynamic (default anyway)
-    // cfg.dynamic_tx_buf_num = 10;                // we want packets to be sent really fast. 
     ESP_ERROR_CHECK(esp_wifi_init(&cfg));
 
     ESP_ERROR_CHECK(esp_event_handler_register(WIFI_EVENT, ESP_EVENT_ANY_ID, &wifi_event_handler, NULL));

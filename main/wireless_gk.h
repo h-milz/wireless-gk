@@ -141,13 +141,13 @@ extern volatile log_t _log[];
 #define UDP_BUF_SIZE            NFRAMES * NUM_SLOTS_UDP * SLOT_SIZE_UDP
 #define NUM_RINGBUF_ELEMS       64                      // this needs to be a power of 2. 
 // #define UDP_PAYLOAD_SIZE        UDP_BUF_SIZE + 16       // 
-#define RINGBUF_OFFSET          4                       // when do we start to shuffle data to I2S. 
+#define RINGBUF_OFFSET          3                       // when do we start to shuffle data to I2S. 
 
 #define NUM_I2S_BUFS            4 
 // #define I2S_CBUF_SIZE           I2S_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size 
 
 #define I2S_NUM                 I2S_NUM_AUTO
-#define SAMPLE_RATE             44100                   // 48000 should work as well, or anything less
+#define SAMPLE_RATE             41667                   // 48000 should work as well, or anything less
 
 
 /* ***************************************************************

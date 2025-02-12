@@ -279,10 +279,12 @@ IRAM_ATTR bool i2s_tx_callback(i2s_chan_handle_t handle, i2s_event_data_t *event
     p++;
 #endif
 
-    // fetch ringbuf tail pointer
+    // fetch current ringbuf entry
     i2sbuf = ring_buf_get(); 
-    if (i2sbuf != NULL) {               // wait for the ringbuf to be filled
-        // write data to most recently free'd DMA buffer
+    if (i2sbuf == NULL) {           // this is the case when filling the buffer on system start 
+                                    // or when recovering from a buffer overrun
+        memset(dmabuf, 0, size);    // silence
+    } else {                        // write data to most recently free'd DMA buffer
         memcpy(dmabuf, i2sbuf, size); 
     }        
     return false; 

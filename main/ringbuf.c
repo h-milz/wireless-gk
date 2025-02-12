@@ -30,6 +30,7 @@
 static uint32_t write_idx;             
 static uint32_t idx_mask; 
 static uint32_t ssn=1, rsn=1, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
+DRAM_ATTR static uint32_t diffsn; 
 static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
 DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS];  // TODO is being read only, does not need to be DRAM_ATTR. 
@@ -231,7 +232,7 @@ void ring_buf_put(udp_buf_t *udp_buf) {
         d = ssn - rsn;
         if (d > stats[0]) stats[0] = d;
         if (d < stats[1]) stats[1] = d;
-        if (ssn <= rsn)   stats[2]++;
+        // if (ssn <= rsn)   stats[2]++;
     }
 #endif            
 
@@ -284,8 +285,11 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
             stalled = true;    
         }
         p = (uint8_t *)ring_buf[last_valid_rsn & idx_mask];
+        stats[2]++;
+        p = NULL; 
     }
 
+    diffsn = rsn - bufssn[rsn & idx_mask];
     rsn = rsn + 1; 
     if (time3 == 0) {                   // when does the first fetch occur. 
         time3 = get_time_us_in_isr();
@@ -331,7 +335,7 @@ void rx_stats_task(void *args) {
             int delta_t, delta_t_ssn;
             uint32_t last_ts = 0, last_ssn_ts = 0;
             overall_stats[2] += stats[2]; 
-            ESP_LOGI(TAG, "%10lu %10lu Rx %.1f°C Tx %.1f°C", stats[2], overall_stats[2], rx_temp, tx_temp);
+            ESP_LOGI(TAG, "%10lu %10lu Rx %.1f°C Tx %.1f°C %lu", stats[2], overall_stats[2], rx_temp, tx_temp, diffsn);
             stats[2] = 0; 
 
 #ifdef SSN_STATS

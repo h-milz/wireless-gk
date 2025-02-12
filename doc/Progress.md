@@ -1,5 +1,10 @@
 # Progress 
 
+2025-02-12
+
+ * much testing and optimizing. It turns out that at seemingly random intervals, outgoing datagrams in the sender pile up in the Wifi buffer before getting sent, and in these cases receptions stalls. This led to the pops and glitches I've been encountering. Also, the rate and length of stalls appears to depend on the CPU core temperature which goes up to about 39°C within half an hour (mind you, this is a pre-production sample where Espressif may work on not for the first, but maybe for the second production release). With a much larger Rx buffer and a different strategy of handling the stalls, I'm now down to 10 ms latency while stalls up to 10-20 ms are barely audible because I return silence when this happens. I can now listen music for hours without problems. I expect the synth to be able to handle the remaining gaps. I mean, on stage it's very noisy anyway ... 
+
+
 2025-02-03
 
  * long measurement session to find sweet spots between sample rate, number of frames per packet, and the offset of the pointers in the ring buffer. It appears that at 44.1 kHz, 60 frames and an offset of 4 ist best, as far as packet errors. The remaining errors are mitigated by caching each valid sample so that in case of a packet error, the cached sample is used and the packets gaps are linearly interpolated to avoid discontinuities. Also, receiving a larger number of packets before starting replay helps. Defensively, the end-to-end latency is 11.4 ms. 

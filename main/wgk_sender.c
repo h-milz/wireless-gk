@@ -181,7 +181,7 @@ void init_wifi_tx(bool setup_requested) {
         ESP_LOGI(TX_TAG, "normal STA startup...");
     }        
     
-    esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
+    // esp_wifi_set_ps(WIFI_PS_NONE);    // prevent  ENOMEM?
     
     // ESP_LOGI(TX_TAG, "wifi_init_sta finished.");
 

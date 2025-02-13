@@ -30,7 +30,7 @@
 static uint32_t write_idx;             
 static uint32_t idx_mask; 
 static uint32_t ssn=1, rsn=1, prev_ssn;             // send_sequence_number, read_sequence_number, previous send_sequence_number
-DRAM_ATTR static uint32_t diffsn; 
+DRAM_ATTR static int diffsn; 
 static uint32_t init_count = 0; 
 static i2s_buf_t *ring_buf[NUM_RINGBUF_ELEMS];
 DRAM_ATTR static uint32_t bufssn[NUM_RINGBUF_ELEMS];  // TODO is being read only, does not need to be DRAM_ATTR. 
@@ -209,7 +209,9 @@ void ring_buf_put(udp_buf_t *udp_buf) {
     }
 #endif    
     
-                 
+    // TODO: init_count should be reset to 0 when an error occurs during startup,
+    // so that we actually have consecutive packets. But then, we never saw missing 
+    // or out of order packets .. 
     if (!running && (init_count >= RINGBUF_OFFSET + 2)) {       // if we have enough consecutive valid packets: start replay. 
         running = true;
         time2 = get_time_us_in_isr(); 
@@ -266,9 +268,10 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
 
     // if (bufssn[rsn & idx_mask] == rsn)  this is a regular packet, and we are exactly on track. Must be first in if-else. 
     // if (bufssn[rsn & idx_mask] >  rsn)  we observe a burst outpacing rsn. smoothe with the last valid packet. 
-    // if (bufssn[rsn & idx_mask] <  rsn)  we observe a stall and loop the last valid packet. 
+    // if (bufssn[rsn & idx_mask] <  rsn)  we observe a stall and return silence
     
-    if (bufssn[rsn & idx_mask] == rsn) {            // sender is ahead of us: OK. 
+    diffsn = rsn - bufssn[rsn & idx_mask];
+    if (bufssn[rsn & idx_mask] == rsn) {              // sender is ahead of us: OK. 
         p = (uint8_t *)ring_buf[rsn & idx_mask];        
         last_valid_rsn = rsn;
         stalled = false; 
@@ -278,18 +281,22 @@ IRAM_ATTR uint8_t *ring_buf_get(void) {
         p = (uint8_t *)ring_buf[rsn & idx_mask];        
         last_valid_rsn = rsn;
         stalled = false; 
-    } else {                                        // sending has stalled; we need to loop the last valid sample
+    } else {                        // sending has stalled; return silence
         // smoothe once with itself in case we're stalled
+/*
         if (!stalled) {
             smoothe (ring_buf[last_valid_rsn & idx_mask], ring_buf[last_valid_rsn & idx_mask], SMOOTHE_SHORT);
             stalled = true;    
         }
         p = (uint8_t *)ring_buf[last_valid_rsn & idx_mask];
+*/
+        if (diffsn >= NUM_RINGBUF_ELEMS) {     // now that was really an overrun!  
+            // rsn = rsn - NUM_RINGBUF_ELEMS  ;   
+        }
         stats[2]++;
         p = NULL; 
     }
 
-    diffsn = rsn - bufssn[rsn & idx_mask];
     rsn = rsn + 1; 
     if (time3 == 0) {                   // when does the first fetch occur. 
         time3 = get_time_us_in_isr();
@@ -335,7 +342,7 @@ void rx_stats_task(void *args) {
             int delta_t, delta_t_ssn;
             uint32_t last_ts = 0, last_ssn_ts = 0;
             overall_stats[2] += stats[2]; 
-            ESP_LOGI(TAG, "%10lu %10lu Rx %.1f°C Tx %.1f°C %lu", stats[2], overall_stats[2], rx_temp, tx_temp, diffsn);
+            ESP_LOGI(TAG, "%10lu %10lu Rx %.1f°C Tx %.1f°C %d", stats[2], overall_stats[2], rx_temp, tx_temp, diffsn);
             stats[2] = 0; 
 
 #ifdef SSN_STATS

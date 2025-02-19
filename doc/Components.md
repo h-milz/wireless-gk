@@ -2,46 +2,50 @@
 
   * MCU: [ESP32-C5](https://www.espressif.com/en/news/ESP32-C5) modules with u.fl connector for an external antenna. The chip was announced in spring 2022 but is not commercially available yet, but should be around mid-2025 (which is the planned release date for ESP-IDF 5.5 which is supposed to officially [support the chip](https://github.com/espressif/esp-idf/issues/14021)). According to the [information there is](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32c5/esp32-c5-devkitc-1/user_guide.html), this MCU sports two RISC-V cores one of which runs at 240 MHz, the other at 20 MHz (ultra-low-power), and it will support 5 GHz WiFi6 (i.e. 802.11ax). In 2H2025, ESP32-C5 modules should be available in pretty much every IoT shop. 
      
-  * ADC: AKM [AK5538VN](https://www.akm.com/eu/en/products/audio/audio-adc/ak5538vn/) 8-ch audio ADC which is [I2S / TDM](https://en.wikipedia.org/wiki/I%C2%B2S) capable. The chip is available from DigiKey or Mouser. 
+  * ADC: Two Texas Instruments [TLV320ADC5140](https://www.ti.com/lit/gpn/TLV320ADC5140) 4-ch audio ADCs which are [I2S / TDM](https://en.wikipedia.org/wiki/I%C2%B2S) capable and having intersting features to deal with the huge dynamics of a guitar signal (namely, DRE -- see section "Dynamic Range Enhancer (DRE)" in the TLV320ADC5140 data sheet). DRE provides pretty much what Roland does manually in their input circuitry, namely switching the input gain depending on the input level, thus improving the dynamic range and avoiding clipping when a string is pluck really hard. The two ADCs will be daisy chained to form a single 8-channel ADC. 
 
-  * DAC: AKM [AK4458VN](https://www.akm.com/eu/en/products/audio/audio-dac/ak4458vn/) 8-ch audio DAC, also speaking TDM. The chip is available from DigiKey or Mouser. 
+  * DAC: Texas Instruments [PCM1681](https://www.ti.com/lit/gpn/PCM1681) 8-ch audio DAC, also speaking TDM. 
 
-  * a couple of low-noise op-amps like NE5532 or NJM2068. (available everywhere)
+  * a couple of bipolar input low-noise audio op-amps like NE5532 or NJM2068.
 
-  * some power management chips for LiPo charging and creating supply voltages.
+  * some power management chips for LiPo charging and creating supply voltages, all Texas Instruments.
 
   * connecting the device to the guitar will require a short GK cable of about 50 cm length. Such cables seem not to be available on the market, which means we will have to make our own stubs. In this case, as an option we could use 15-pin DB connectors (VGA connectors) which are much more rugged and smaller. 
  
-During the development stage I need to use a 2-channel ADC and DAC each because breadboard-capable breakout boards are easily available (not so for the 8-channels parts). This is a TI PCM1808 ADC and PCM5102 DAC. The data protocol accomodates 8 channels, though, and the real audio data will occupy channels #0 and #1 while the rest will be zeros for now. As soon as everything works for 2 channels, I'll probably begin to make the first version of a sender / receiver PCB where the actual parts can be evaluated. 
+So far, during the development stage I have been using a 2-channel ADC and DAC each because breadboard-capable breakout boards are easily available (not so for the 8-channels parts). This is a TI PCM1808 ADC and PCM5102 DAC. The data protocol between sender and receiver accomodates 8 channels, though, and the real audio data from the stereo parts occupy slots #0 and #1 of each TDM frame while the rest are zeros for now. As soon as everything works for 2 channels, I'll probably begin to make the first version of a sender / receiver PCB where the actual parts can be evaluated. 
 
 ## Sample Rate
   
-Primarly for marketing reasons, everything will work with 24 bit resolution and 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16 bit / 32 kHz or 16 bit / 36 kHz would probably be enough. No guitar pickup produces a significant amount of frequencies above, say, 10 or 12 kHz, and a dynamic range of 96 dB for 16 Bit (like CD audio) would be sufficient. The downside to this is, it will require a higher over-the-air bandwidth. (Software and hardware support all possible values so we can just experiment a bit). 
+The current plan is that everything will work with 24 bit resolution and 44.1 kHz sample rate. The VG-99 and the GR-55 work with these parameters, and it would be hard to advertise a device that does less, although from a technical standpoint 16 bit / 32 kHz or 16 bit / 36 kHz would probably be enough. I am going to measure the actual frequency response of the GK-3 hex pickup though, and I would be surprised if it produced a significant amount of frequencies above, say, 10 or 12 kHz. Also, a dynamic range of 96 dB for 16 Bit (like CD audio) would be sufficient, because as discussed below the effective ADC resolution will not be more than 18 or 19 bits anyway. The downside to using 24/44 will be its higher over-the-air bandwidth requirement. (Software and hardware support all possible values so we can just experiment a bit). 
 
 ## Clock Generation 
 
-The ESP32 I2S MCLK may have considerable jitter if the divider system clock / MCLK is not integer. For example, with a system clock of 240 MHz and a MCLK of 11.2896 MHz (256 * 44.1 kHz) the divider will have to be 21.25850...  In this case, MCLK is generated by a [fractional divider](https://en.wikipedia.org/wiki/Dual-modulus_prescaler) which switches between 21 and 22 in regular or random intervals, generating additional phase noise (see reference below) and hence reducing the effective ADC resolution by 1 or 2 bits (the closer the fractional part is to 0.5, the more). There are three  ways of mitigating this:   
+The ESP32 I2S MCLK may have considerable jitter if the divider system clock / MCLK is not integer. For example, with a system clock of 240 MHz generated from the 48 MHz XTAL with a clock jitter of, say, 10 ps (this is not a particularly high-precision part) and a MCLK of 11.2896 MHz (256 * 44.1 kHz) the divider will have to be 21.25850...  In this case, MCLK is generated by a [fractional divider](https://en.wikipedia.org/wiki/Dual-modulus_prescaler) which switches between 21 and 22 in regular or random intervals, generating additional phase noise (see reference below) and hence reducing the effective ADC resolution to about 30 bits without observing the typical jitter from a delta-sigma fractional divider, and 25 with (and I don't know what kind of fractional divider Espressif uses in the I2S hardware - so far no answer to my support question). This is is just so acceptable because we work with 24 bits anyway, but we could mitigate it like this: 
   
  1. One can use 11.2896 or 22.5792 MHz standard oscillators for generating the master clock fed into the ESP32, which then creates the remaining clocks BCLK and WS using integer dividers, ruling out jitter.  These oscillators with +/- 10 ppm tolerance cost less than a dollar.  
 
- 2. We can use samples rates which can be generated from the available I2S clocks (48, 160, and 240 MHz) using integer dividers, e.g. 46875, 37500, or 31250 Hz.
-
- 3. On the other hand, if we sample with a 32 bit resolution and pack the frames to 24 bit samples, we will truncate the 8 least significant bits anyway. On the Sender side, this should completely remove the jitter induced noise (and lift the noise floor accordingly), but not on the Receiver side, where we push out 24 bit samples with a fractional divider generated clock. OK, there remains an effective resolution of, say, 22 bits, which, as stated above, should by far be sufficient. 
+ 2. We can use samples rates which can be generated from the available I2S clocks (48, 160, and 240 MHz) using integer dividers, e.g. 46875, 37500, or 31250 Hz, thus entirely avoiding additional jitter from the fractional divider. 
 
 Doing the math using the manufacturer's data sheets reveals: 
 
- * the AK5538VN is specified to have a dynamic range (DR) of 111 dB and an S/N of 111 dB, which adds up to S/(N+D) = 103 dB. This equal to a resolution of 103 dB / 6 bits per dB = 17.16 bit. Whohoo. 
- * likewise, the AK4438VN is specified to have DR = S/N = 108 dB equivalent to 18 bits. 
+ * the TLV320ADC5140 is specified to have a dynamic range (DR) of 120 dB (with DRE), but only 102 will remain because I will have to attenuate the input signal by 18 dB to make sure no clipping takes place. This is equal to a resolution of 102 dB / 6 bits per dB = 17 bits. Whohoo. 
+ * likewise, the PCM1681 is specified to have DR = S/N = 105 dB equivalent to 17.5 bits. 
 
 This being said, from an engineering standpoint we may as well give a sh*t and use the internal clock generator of the ESP32 module. 
 
-It's not that other audio converters marketed with 24 or 32 bit resolution are significantly better. Cirrus Logic specifies their CS5308 ADC and CS4308 DAC parts as having a 123 dB dynamic range. This is equivalent to an effective resolution of 20.5 bits. Texas Instruments PCM4204 DAC has a DR of 118 dB, the PCM1840 ADC claims 113 dB (or 123 dB using a "dynamic range enhancer"). Likewise, Analog Devices claims 107-110 dB for their parts (and I suspect they are the only ones being honest).  And this is pretty much the market for high-fidelity audio converters. Another aspect is availability. It makes no sense to use a part that may soon be out of production, or more expensive at the same specifications. And since Roland (being a Japanese company) uses AKM, I'd vote for using AKM as well.   And by the way, Roland use the AK5357 in their GR-55 and VG-99 input stages. This part is rated at 102 dB dynamic range and S/N ratio. Which means the AK5538/4438 are good enough in any case. 
+It's not that other audio converters marketed with 24 or 32 bit resolution are significantly better. Cirrus Logic specifies their CS5308 ADC and CS4308 DAC parts as having a 123 dB dynamic range. This is equivalent to an effective resolution of 20.5 bits. AKM states 111 dB for the AK5538 and 108 dB for the AK4438. Likewise, Analog Devices claims 107-110 dB for their parts.  And this is pretty much the market for high-fidelity multi-channel audio converters. Another aspect is availability. It makes no sense to use a part that may soon be out of production, or more expensive at the same specifications. Roland (being a Japanese company) uses AKM, so I'd vote for using AKM at first sight. But the TI ADC has DRE, and the TI parts are readily available from JLCPCB which AKM is not. Also, TI has a history of producing their parts for a very long time. And, frankly, their documentation is far more comprehensive. 
   
 (side note: as I demonstrated on the [Filterdesign](Filterdesign.md) page, the analog circuitry will not be much better than 21 bits either.) 
 
 ## References 
 
- * Texas Instruments Techical Brief [Fractional/Integer-N PLL Basics](https://www.ti.com/lit/an/swra029/swra029.pdf), August 1999
+ * Texas Instruments [TLV320ADC5140](https://www.ti.com/product/TLV320ADC5140)
+ * Texas Instruments [PCM1681](https://www.ti.com/product/PCM1681)
+ * Texas Instruments Application Note [Multiple TLV320ADCx140/PCMx140-Q1, TLV320ADCx120,
+and PCMx120-Q1 Devices With Shared TDM and I2C Bus](https://www.ti.com/lit/pdf/sbaa383), January 2024
+ * Texas Instruments Application Note [Using the Dynamic Range Enhancer in
+TLV320ADC5140/6140 and PCM5140-Q1/PCM6140-Q](https://www.ti.com/lit/pdf/sbaa400)
+ * Texas Instruments Technical Brief [Fractional/Integer-N PLL Basics](https://www.ti.com/lit/an/swra029/swra029.pdf), August 1999
  * ESP32-C6 [Technical Reference Manual](https://www.espressif.com/sites/default/files/documentation/esp32-c6_technical_reference_manual_en.pdf), sections 8.2 "Clock" and 29.6 "I2S RX/TX Clock"
 
 

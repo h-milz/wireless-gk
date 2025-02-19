@@ -147,7 +147,7 @@ extern volatile log_t _log[];
 // #define I2S_CBUF_SIZE           I2S_BUF_SIZE * NUM_I2S_BUFS  // ring buffer size 
 
 #define I2S_NUM                 I2S_NUM_AUTO
-#define SAMPLE_RATE             41667                   // 48000 should work as well, or anything less
+#define SAMPLE_RATE             31250                   // 48000 should work as well, or anything less
 
 
 /* ***************************************************************
@@ -173,7 +173,7 @@ static i2s_tdm_config_t i2s_rx_cfg = {
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
         .sample_rate_hz = SAMPLE_RATE,
         .mclk_multiple = I2S_MCLK_MULTIPLE,     // Set MCLK / WS ratio 
-        .clk_src = I2S_CLK_SRC_DEFAULT,    // I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
+        .clk_src = I2S_CLK_SRC_XTAL, // DEFAULT,    // I2S_CLK_SRC_DEFAULT,         // we will use I2S_CLK_SRC_EXTERNAL !
         // .ext_clk_freq_hz = 11289600,         // if external. sample_rate_hz * slot_bits * slot_num
     },
 #ifdef I2S_STD
@@ -220,7 +220,7 @@ static i2s_tdm_config_t i2s_tx_cfg = {
     .clk_cfg = {                                // I2S_STD_CLK_DEFAULT_CONFIG(SAMPLE_RATE),
         .sample_rate_hz = SAMPLE_RATE,
         .mclk_multiple = I2S_MCLK_MULTIPLE,     // Set MCLK / WS ratio
-        .clk_src = I2S_CLK_SRC_DEFAULT, // ,         // we will use I2S_CLK_SRC_EXTERNAL !
+        .clk_src = I2S_CLK_SRC_XTAL, // DEFAULT, // ,         // we will use I2S_CLK_SRC_EXTERNAL !
         // .ext_clk_freq_hz = 11289600,         // if external. sample_rate_hz * slot_bits * slot_num
     },
 #ifdef I2S_STD
